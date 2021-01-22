@@ -32,7 +32,7 @@ logging.basicConfig(
 
 class Common(object):
 
-	__revision__ = 12 # Will be automatically increased each publish, leave this comment!
+	__revision__ = 13 # Will be automatically increased each publish, leave this comment!
 
 	OS_LINUX 		= "linux"
 	OS_MAC 			= "mac"
@@ -158,13 +158,16 @@ class Common(object):
 						# My platform
 						prefix_to = prefix
 					else:
-						if 0<len(prefix) and p.lower().find(prefix.lower()) == 0:
+						if 0<len(prefix) and (p.startswith('share={}'.format(share['code'])) or p.startswith('share={}'.format(share['id'])) or p.lower().find(prefix.lower()) == 0):
 							prefix_from = prefix
 				if prefix_from:
 					break
 
 			if prefix_from and prefix_to:
-				p = prefix_to + (("/" if prefix_to[-1]!="/" and p[len(prefix_from)]!="/" else "") + p[len(prefix_from):] if len(prefix_from)<len(p) else "")
+				if p.startswith('share='):
+					p = prefix_to + p[p.find('/'):]
+				else:
+					p = prefix_to + (("/" if prefix_to[-1]!="/" and p[len(prefix_from)]!="/" else "") + p[len(prefix_from):] if len(prefix_from)<len(p) else "")
 			# Turn back paths
 			if Common.is_win():
 				p = p.replace("/","\\")
@@ -197,7 +200,7 @@ class Common(object):
 	@staticmethod
 	def debug(s):
 		if Common.is_debug():
-			logging.info("<<FH DEBUG>> %s"%s)
+			logging.info("<<ACCSYN APP DEBUG>> %s"%s)
 
 	@staticmethod
 	def set_debug(debug):

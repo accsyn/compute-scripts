@@ -30,7 +30,7 @@ except ImportError,e:
 
 class App(Common):
 
-	__revision__ = 1 # Will be automatically increased each publish
+	__revision__ = 2 # Will be automatically increased each publish
 
 	# App configuration
 	# IMPORTANT NOTE:
@@ -52,7 +52,7 @@ class App(Common):
 
 	# -- APP CONFIG END --
 
-	NUKE_VERSION = "12"
+	NUKE_VERSION = "11"
 	
 	def __init__(self, argv):
 		super(App, self).__init__(argv)
@@ -164,12 +164,10 @@ class App(Common):
 		#   define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 		preferred_nuke_version = None
 		with open(input_path, "r") as f_input:
-			lc = 0
 			for line in f_input:
-				lc += 1
-				if lc == 2:
+				if line.startswith('version '):
 					#  version 10.0 v6
-					preferred_nuke_version = line.split("version")[1].replace(" ","")
+					preferred_nuke_version = line[8:].replace(" ","")
 					Common.info("Parsed Nuke version: '%s'"%preferred_nuke_version)
 
 		if Common.is_lin():
