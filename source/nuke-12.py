@@ -1,6 +1,6 @@
 ''' 
 
-	Nuke v11 accsyn compute app script.
+	Nuke v12 accsyn compute app script.
 
 	Finds and executes Nuke by building a commandline out of 'item'(frame number)
 	and parameters provided.
@@ -33,7 +33,7 @@ except ImportError,e:
 
 class App(Common):
 
-	__revision__ = 3 # Will be automatically increased each publish
+	__revision__ = 2 # Will be automatically increased each publish
 
 	# App configuration
 	# IMPORTANT NOTE:
@@ -55,7 +55,7 @@ class App(Common):
 
 	# -- APP CONFIG END --
 
-	NUKE_VERSION = "11"
+	NUKE_VERSION = "12"
 	
 	def __init__(self, argv):
 		super(App, self).__init__(argv)
@@ -129,7 +129,7 @@ class App(Common):
 			p_app = find_executable(p_base, "Nuke{}".format(App.NUKE_VERSION))
 		if p_app:
 			if Common.is_mac():
-				return os.path.join(p_app, '{}.app'.format(os.path.basename(p_app)), "Contents", "MacOS", os.path.basename(p_app))
+				return os.path.join(p_app, '{}.app'.format(os.path.basename(p_app)), "Contents","MacOS", os.path.basename(p_app))
 			else:
 				return os.path.join(p_app, "nuke{}{}".format(App.NUKE_VERSION, ".exe" if Common.is_win() else ""))
 		else:
@@ -151,7 +151,7 @@ class App(Common):
 			hostname = socket.gethostname().lower()
 			if hostname.find("a")==0 or hostname.find("b")==0 or hostname.find("c")==0:
 				args.append("-i")
-		if self.item and self.item != "all":
+		if not self.item is None and self.item != "all":
 			# Add range
 			start = end = self.item
 			if -1<self.item.find("-"):

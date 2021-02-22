@@ -16,7 +16,7 @@
 	Author: Henrik Norin, HDR AB
 
 '''
-
+from __future__ import print_function
 import os
 import sys
 import json
@@ -25,6 +25,7 @@ import unicodedata
 import subprocess
 import traceback
 
+
 logging.basicConfig(
 	format="(%(asctime)-15s) %(message)s", 
 	level=logging.INFO, 
@@ -32,7 +33,7 @@ logging.basicConfig(
 
 class Common(object):
 
-	__revision__ = 13 # Will be automatically increased each publish, leave this comment!
+	__revision__ = 14 # Will be automatically increased each publish, leave this comment!
 
 	OS_LINUX 		= "linux"
 	OS_MAC 			= "mac"
@@ -51,6 +52,10 @@ class Common(object):
 
 	def __init__(self, argv):
 		# Expect path to data in argv
+		self.executing = False
+		self.exitcode_force = None
+		self.process = None
+
 		if "--dev" in argv:
 			Common._dev = True
 			Common._debug = True
@@ -126,10 +131,13 @@ class Common(object):
 	@staticmethod
 	def info(s):
 		logging.info("[ACCSYN] {}".format(s))
+		sys.stdout.flush()
 
 	@staticmethod
 	def warning(s):
 		logging.warning("[ACCSYN] {}".format(s))
+		sys.stdout.flush()
+		sys.stderr.flush()
 
 	# PATH CONVERSION
 
@@ -236,6 +244,16 @@ class Common(object):
 		''' (OPTIONAL) Return the process creation flags. ''' 
 		return None
 
+	def process_output(self, stdout, stderr):
+		''' 
+		(OPTIONAL) Sift through stdout/stderr and take action. 
+		
+		Return value:
+		   None (default); Do nothing, keep execution going.
+		   integer; Terminate process and force exit code to this value. 
+		'''
+		return None
+
 	###########################################################################
 
 	def load(self):
@@ -251,6 +269,21 @@ class Common(object):
 	def get_common_envs(self):
 		return self.get_envs()
 
+	def kill(self):
+		''' Kill the current running PID '''
+		if not self.executing or self.process is None:
+			Common.warning('Refusing terminate - not running or have no process info!')
+			return
+		Common.warning('Terminating PID: {}'.format(self.process.pid))
+		if Common.is_win():
+			os.system('TASKKILL /f /PID {}'.format(self.process.pid))
+		else:
+			os.system('kill -9 {}'.format(self.process.pid))
+		#try:
+		#	self.process.terminate()
+		#except:
+		#	Common.warning(traceback.format_exc())
+
 	def execute(self):
 		''' Compute '''
 		commands = self.get_commandline(self.item)
@@ -261,8 +294,8 @@ class Common(object):
 		if len(app_envs)==0:
 			app_envs = None
 		log = True
-		exitcode = 0
-		
+		exitcode = None
+		self.executing = True
 		try:
 			new_envs = None
 			if app_envs:
@@ -286,29 +319,71 @@ class Common(object):
 				Common.info("Creation flags: '%s"%creationflags)
 			Common.info("-"*120)
 
-			#if fetch_output:
-			#	process = subprocess.Popen(commands, shell, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, env=new_envs)
+			first_run = True
 			if stdin:
-				first_run = True
-				process = subprocess.Popen(commands, shell, stdin=subprocess.PIPE, env=new_envs, creationflags=creationflags)
-				while True:
-					# Empty data waiting for us in pipes
-					process.communicate(input=stdin if not stdin is None and first_run else None)
-					first_run = False
-					exitcode=process.poll()
+				if not creationflags is None:
+					self.process = subprocess.Popen(commands, shell, stdin=subprocess.PIPE, env=new_envs, creationflags=creationflags, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+				else:
+					self.process = subprocess.Popen(commands, shell, stdin=subprocess.PIPE, env=new_envs, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
 			else:
-				process = subprocess.Popen(commands, True, env=new_envs)
-				exitcode = process.wait()
+				if not creationflags is None:
+					self.process = subprocess.Popen(commands, True, env=new_envs, creationflags=creationflags, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+				else:
+					self.process = subprocess.Popen(commands, True, env=new_envs, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+			#exitcode = self.process.wait()
+			while True:
+				# stdout, stderr = self.process.communicate(input=stdin if not stdin is None and first_run else None)
+				if first_run:
+					Common.info('Process PID: {}'.format(self.process.pid))
+					if stdin:
+						self.process.stdin.write(stdin)
+					first_run = False
+
+				# Empty data waiting for us in pipes
+				stdout = self.process.stdout.readline()
+				print(stdout, end = '')
+				sys.stdout.flush()
+				
+				# Can't read stderr in the same way - will block until something printed to stderr.
+				#stderr = self.process.stderr.readline()
+				#print(stderr, file=sys.stderr, end = '')
+				#sys.stderr.flush()
+
+				process_result = self.process_output(stdout, '')
+				if not process_result is None:
+					Common.warning('Premptive terminating process (pid: {}).'.format(self.process.pid))
+					exitcode = process_result
+					break
+				elif stdout == '' and self.process.poll() is not None:
+					break
+
+			self.process.communicate() # Dummy call, needed?
+			if exitcode is None:
+				exitcode = self.process.returncode
+
+			#exitcode = process.poll()
+			#if exitcode is None:
+			#	time.sleep(0.2) # Still running, breathe
+			#else:
+			#	break
 
 		finally:
 			try:
-				process.terminate()
+				self.process.terminate()
 			except:
 				pass
-		
-		process=None
+			self.executing = False
+
+		self.process = None
+
+		if not self.exitcode_force is None:
+			exitcode = self.exitcode_force
+			Common.info('Exitcode (forced): {}'.format(exitcode))
+		else:
+			Common.info('Exitcode: {}'.format(exitcode))
 
 		# More commands?
-		assert (exitcode == 0),("Execution failed, check log for clues...")
+		assert (exitcode == 0) , ("Execution failed, check log for clues...")
 
 
