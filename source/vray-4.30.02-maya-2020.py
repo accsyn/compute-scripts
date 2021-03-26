@@ -16,7 +16,13 @@
 
 '''
 
-import os, sys, logging, traceback, json, time, datetime, socket, random
+import os
+import sys
+import logging
+import traceback
+import json
+import time
+import datetime
 
 try:
 	from common import Common 
@@ -26,7 +32,7 @@ except ImportError,e:
 
 class App(Common):
 
-	__revision__ = 1 # Increment this after each update
+	__revision__ = 2 # Increment this after each update
 	
 	# App configuration
 	# IMPORTANT NOTE:
@@ -37,7 +43,8 @@ class App(Common):
 		"items" : True, 
 		"default_range" : "1001-1100", 
 		"default_bucketsize" : 1,
-		"filename_extensions" : ".ma,.mb"
+		"filename_extensions" : ".ma,.mb",
+		"binary_filename_extensions" : ".mb"
 	}
 
 	PARAMETERS = {
@@ -129,10 +136,11 @@ class App(Common):
 				start = parts[0]
 				end = parts[1]
 			args.extend(["-s", str(start), "-e", str(end)])
-		if 'output' in self.data['compute']:
-			path_output = self.normalize_path(self.data['compute']['output'], mkdirs=True)
-			args.extend(["-rd", path_output])
-		p_input = self.normalize_path(self.data['compute']['input'])
+		if 'output' in self.get_compute()['compute']:
+			# Output has already been converted to local platform
+			args.extend(["-rd", self.get_compute()['compute']['output']])
+		# Input has already been converted to local platform
+		p_input = self.normalize_path(self.get_compute()['input'])
 		args.extend([p_input])
 		if Common.is_lin():
 			retval = [self.get_executable()]

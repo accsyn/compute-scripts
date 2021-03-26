@@ -36,20 +36,41 @@ class App(Common):
 	__revision__ = 2 # Will be automatically increased each publish
 
 	# App configuration
+	#
 	# IMPORTANT NOTE:
-	# This section defines app behaviour and should not be refactored or moved away from the enclosing START/END markers. Read into memory by cloud at start and publish. 
+	#   This section defines app behaviour and should not be refactored or moved away from the enclosing START/END markers. Read into memory by cloud at start and publish. 
+	#
+
 	# -- APP CONFIG START --
 
 	# Can be retreived during execution from: self.get_compute()['settings']
+	#  - items; If true, each inpit file can be split and executed in ranges (render)
+	#  - default_range; (items) The default item range.
+	#  - default_bucketsize; The default amount of items to dispatch to each compute node/machone.
+	#  - filename_extensions: Comma(,) separated list of filename extensions associated with app.
+	#  - binary_filename_extensions: Comma(,) separated list of filename extensions that indicated a binary non parseable format.
+
 	SETTINGS = {
 		"items" : True, 
 		"default_range" : "1001-1100", 
 		"default_bucketsize" : 5,
-		"filename_extensions" : ".nk"
+		"filename_extensions" : ".nk",
+		"binary_filename_extensions" : "",
 	}
 
 	# Can be retreived during execution from: self.get_compute()['parameters']
+	# - arguments; The additional command line arguments to pass on to app.
+	#  - remote_os; The operating system ("windows", "linux" or "mac") on machine that submitted the job, used for parsing below.
+	#  - input_conversion; Define what kind of input file path conversion should happen on compute cluster (non binary formats only): 
+	#    * 'always' - expect that the input files always needs paths converted - contains local share mapped paths.
+	#    * 'platform' - all paths are assumed being relative root share, not conversion needed except when switching platform (and platform path prefixes differs).
+	#    * 'never' - all paths are assumed being relative root share and works on all platforms, or are relative and do need conversion.
+	#  - mapped_share_paths(input_conversion=always); List of dicts on the form {'remote':'D:\\PROJECTS\\MYSHARE','global':"share=root_share_id/share_path"}, used during input file parsing.
+
 	PARAMETERS = {
+		"remote_os": "unknown",
+		"input_conversion": "always",
+		"mapped_share_paths": [],
 		"arguments" : "-txV"
 	}
 

@@ -24,7 +24,9 @@ import logging
 import unicodedata
 import subprocess
 import traceback
-
+import socket
+import time
+import random
 
 logging.basicConfig(
 	format="(%(asctime)-15s) %(message)s", 
@@ -124,6 +126,13 @@ class Common(object):
 	def is_win():
 		return Common.get_os() == Common.OS_WINDOWS
 
+	def get_remote_os(self):
+		remote_os = self.get_compute()['parameters'].get('remote_os')
+		if remote_os is None:
+			remote_os = self.get_os()
+			debug('Do not know remote OS, assuming its the same as mine.')
+		return remote_os.lower()
+
 	@staticmethod
 	def safely_printable(s):
 		return unicodedata.normalize("NFKD", unicode(s) if not isinstance(s, unicode) else s).encode("ascii", errors="ignore")
@@ -143,6 +152,7 @@ class Common(object):
 
 	def normalize_path(self, p, mkdirs=False):
 		''' Based on share mappings supplied, convert a foreign path to local platform '''
+		Common.debug('normalize_path({},{})'.format(p, mkdirs))
 		if p is None or 0==len(p):
 			return p
 		try:
@@ -150,11 +160,31 @@ class Common(object):
 			# Turn paths
 			#if Common.is_win():
 			p = p.replace("\\","/")
+			if p.lower().startswith('share=') and 'share_paths' in self.get_compute()['parameters']:
+				# Could be a path relative share, must be made relative root share first
+				idx_slash = p.find('/')
+				p_rel = None
+				if -1<idx_slash:
+					share_code = p[:idx_slash].split('=')[-1]
+					p_rel = p[idx_slash+1:]
+				else:
+					share_code = p.split('=')[-1]
+				if share_code in self.get_compute()['parameters']['share_paths']:
+					d = self.get_compute()['parameters']['share_paths'][share_code]
+					share_path = d['s_path']
+					p_orig = str(p)
+					p = 'share={}{}{}'.format(
+						d['r_s'], 
+						('/'+share_path) if 0<len(share_path) and not share_path in ['/','\\'] else '',
+						('/'+p_rel) if p_rel else ''
+					)
+					Common.debug('(Share path normalize) Converted share relative path "{}" > root share relative: "{}" (share paths: {})'.format(p_orig, p, self.get_compute()['parameters']['share_paths']))
+
 			# On a known share that can be converted?
 			prefix_from = prefix_to = None
 			for share in self.data.get('shares') or []:
 				for path_ident, prefix in share.get('paths',{}).items():
-					Common.debug('path_ident.lower(): "{}", '
+					Common.debug('(Root share path normalize) path_ident.lower(): "{}", '
 						'Common.get_os().lower(): "{}"'
 						'(prefix_from: {}, prefix_to: {})'
 						.format(
@@ -170,10 +200,28 @@ class Common(object):
 							prefix_from = prefix
 				if prefix_from:
 					break
-
+			if prefix_from is None:
+				# Any supplied path conversions?
+				if 'mapped_share_paths' in self.get_compute()['parameters']:
+					for d in self.get_compute()['parameters']['mapped_share_paths']:
+						Common.debug('(Supplied mapped shares path normalize) d: "{}"'.format(d))
+						if p.lower().startswith(d['remote'].replace("\\","/").lower()):
+							prefix_from = d['remote']
+							prefix_to = d['local']
+							if prefix_to.lower().startswith('share='):
+								share_id = prefix_to.split('=')[-1]
+								for share in self.data.get('shares') or []:
+									if share['id'] == share_id:
+										if Common.get_os().lower() in share.get('paths',{}):
+											prefix_to = share['paths'][Common.get_os().lower()]
+										break
+								if prefix_to.lower().startswith('share='):
+									raise Exception('Cannot find root share {} for remote mapped path conversion {}!'.format(share_id, d))
+							break
 			if prefix_from and prefix_to:
 				if p.startswith('share='):
-					p = prefix_to + p[p.find('/'):]
+					idx_slash = p.find('/')
+					p = prefix_to + (p[idx_slash:] if -1<idx_slash else '')
 				else:
 					p = prefix_to + (("/" if prefix_to[-1]!="/" and p[len(prefix_from)]!="/" else "") + p[len(prefix_from):] if len(prefix_from)<len(p) else "")
 			# Turn back paths
@@ -198,7 +246,7 @@ class Common(object):
 
 	@staticmethod
 	def is_debug():
-		return Common._debug or (os.environ.get("ACCSYN_DEBUG") or os.environ.get("FILMHUB_DEBUG") or "") in ["1","true"]
+		return Common._debug or (os.environ.get("ACCSYN_DEBUG") or os.environ.get("FILMHUB_DEBUG") or "") in ["1","true"] or 
 
 	@staticmethod
 	def is_devmachine():
@@ -227,6 +275,26 @@ class Common(object):
 	def check_mounts(self):
 		''' (OPTIONAL) Make sure all network drives are available prior to compute. '''
 		pass
+
+	def convert_input(self, f_src, f_dst, conversions):
+		''' Basic ASCII file path conversion, should be overridden by app to support more. Raise an exception is localization fails. '''
+		for line in f_src:
+			for (prefix_from, prefix_to) in conversions:
+				while True:
+					idx = line.lower().find(prefix_from.lower())
+					if idx == -1:
+						if -1<prefix_from.find('\\') and -1<line.find('/'):
+							# Windows to *NIX
+							idx = line.lower().find(prefix_from.replace('\\','/').lower())
+						elif -1<prefix_from.find('/') and -1<line.find('\\'):
+							# *NIX to Windows
+							idx = line.lower().find(prefix_from.replace('/','\\').lower())
+					if idx == -1:
+						break
+					line_orig = str(line)
+					line = (line[0:idx] if 0<idx else "")+prefix_to+(line[idx+len(prefix_from):] if idx+len(prefix_from)<len(line) else "")
+					Common.debug('(input convert) "{}">"{}"'.format(line_orig, line))
+			f_dst.write('{}'.format(line))
 
 	def get_executable(self):
 		''' (REQUIRED) Return path to executable as string ''' 
@@ -266,6 +334,180 @@ class Common(object):
 			raise
 		Common.debug("Data loaded:\n%s"%json.dumps(self.data, indent=3))
 
+	def prepare(self):
+		''' Prepare execution - localize files. '''
+		# Any output file?
+		if 'output' in self.data['compute']:
+			p_output = self.normalize_path(self.get_compute()['output'], mkdirs=True)
+			self.get_compute()['output'] = p_output
+		# Any input file?
+		p_input = None
+		if 'input' in self.get_compute():
+			p_input = self.normalize_path(self.get_compute()['input'])
+			# Store it
+			self.get_compute()['input'] = p_input
+			# Is input conversion/localizing needed?
+			input_conversion = self.get_compute()['parameters'].get('input_conversion')
+			if input_conversion is None:
+				input_conversion = 'platform'
+			if input_conversion != 'never':
+				# Is an ASCII parsable format?
+				binary_filename_extensions = self.get_compute().get('settings',{}).get('binary_filename_extensions')
+				if 0<len(binary_filename_extensions or ""):
+					if -1<p_input.find('.'):
+						ext = os.path.splitext(p_input)[1]
+						if -1<binary_filename_extensions.lower().find(ext.lower()):
+							# No, this is a binary format - cannot localize
+							debug('Input file "{}" is a binary format - not attempting to localize...'.format(p_input))
+							return
+					else:
+						Common.debug('(Localization) input file does not have any extension, cannot determine if not binary format and in need of localization...')
+						return
+				p_input_localized = p_input
+				p_input_prefix, p_localized_ext = os.path.splitext(p_input)
+				if input_conversion == 'always':
+					p_input_localized = '{}_accsynlocalzed_hq_{}{}'.format(p_input_prefix, self.get_os(), p_localized_ext)
+				elif input_conversion == 'platform':
+					remote_os = self.get_remote_os()
+					if remote_os != self.get_remote_os():
+						# Does the root share path differ between platforms?
+						# TODO: Support site root share path overrides
+						remote_prefix = local_prefix = None
+						for share in self.data.get('shares') or []:
+							if remote_os in share.get('paths',{}):
+								remote_prefix = share['paths'][remote_os]
+							if self.get_os() in share.get('paths',{}):
+								local_prefix = share['paths'][self.get_os()]
+							if remote_prefix and local_prefix:
+								break
+						if remote_prefix and local_prefix:
+							if remote_prefix != local_prefix:
+								p_input_localized = '{}_accsynlocalzed_hq_{}{}'.format(p_input_prefix, self.get_os(), p_localized_ext)
+							else:
+								Common.debug('(Localization) Remote root share path prefix ({}) and local ({}) are the same, no need to localize...'.format(remote_prefix, local_prefix))
+						if remote_prefix is None:
+							Common.warning('(Localization) Do not know remote root share prefix on {}, cannot localize "{}"...'.format(remote_os, p_input))
+						if local_prefix is None:
+							Common.warning('(Localization) Do not know local root share prefix on {}, cannot localize "{}"...'.format(self.get_os(), p_input))
+				# Do not now
+				if p_input_localized != p_input:
+					# Does it exist?
+					# Check if needs to be parsed and have paths converted
+					#idx_dot = p_input.rfind(".")
+					p_parent = os.path.dirname(p_input)
+					#p_parent_localized = "%s.localized"%(p_parent)
+					#p_input_localized = os.path.join(p_parent_localized,os.path.basename(p_input))
+					p_localized_metadata = os.path.join(p_parent,"%s.localized_metadata"%(os.path.basename(p_input)))
+					do_localize = True
+					localized_size = localized_mtime = None
+					if os.path.exists(p_input_localized):
+						if os.path.exists(p_localized_metadata):
+							# Find out the size and mtime input file had when last localized
+							d = json.load(open(p_localized_metadata, "r"))
+							localized_size = d['size']
+							localized_mtime = d['time']
+							if os.path.exists(p_input):
+								if os.path.getsize(p_input)!=localized_size:
+									Common.warning("Localized file was based on input file that differs in size current (%s<>%s)!"%(localized_size, os.path.getsize(p_input)))
+								elif os.path.getmtime(p_input)!=localized_mtime:
+									Common.warning("Localized file was based on input file that differs in modification time (%s<>%s)!"%(localized_mtime, os.path.getmtime(p_input)))
+								else:
+									# Localized is up to date
+									do_localize = False
+							else:
+								Common.warning("Input file/scene does not exists @ '%s', cannot verify existing localized file!"%p_input)
+								do_localize = False # Nothing we can do now
+						else:
+							Common.warning("Localized file metadata does not exist @ '%s'!"%p_localized_metadata)
+					else:
+						Common.warning("Localized file does not exist @ '%s'!"%p_input_localized)
+					if do_localize:
+						other_is_localizing = False
+						hostname = socket.gethostname()
+						#if not os.path.exists(p_parent_localized):
+						#	Common.info("Creating %s..."%p_parent_localized)
+						#	os.makedirs(p_parent_localized)
+						p_localize_lock = os.path.join(p_parent,"%s.localize_lock"%(os.path.basename(p_input)))
+						Common.info("Checking localize lock @ '%s'..."%p_localize_lock)
+						if os.path.exists(p_localize_lock):
+							# Is it me?
+							other_hostname = "?"
+							try:
+								other_hostname = open(p_localize_lock, "r").read().strip()
+							except:
+								Common.warning(traceback.format_exc())
+							if other_hostname == hostname:
+								Common.warning("Removing previous lock file @ '%s' created by me, killed in action?"%p_localize_lock)
+								os.remove(p_localize_lock)
+						if not os.path.exists(p_localize_lock):
+							# Attempt to take
+							Common.info("Attempting to take lock..."%())
+							with open(p_localize_lock, "w") as f:
+								f.write(hostname)
+							# Wait 2 sek + random time
+							time.sleep(2+2*random.random())
+							# Did we get the lock
+							if os.path.exists(p_localize_lock):
+								# Is it still me?
+								the_hostname = "?"
+								try:
+									the_hostname = open(p_localize_lock, "r").read().strip()
+								except:
+									Common.warning(traceback.format_exc())
+								if the_hostname == hostname:
+									conversions = []
+									# First supply root share conversions
+									for share in self.data.get('shares') or []:
+										prefix_from = prefix_to = None
+										for path_ident, prefix in share.get('paths',{}).items():
+											#Common.Common.debug("path_ident.lower(): '%s', Common.get_os().lower(): '%s'"%(path_ident.lower(), Common.get_os().lower()))
+											if path_ident.lower() == Common.get_os().lower():
+												# My platform
+												prefix_to = prefix
+											elif path_ident == Common.OS_WINDOWS:
+												prefix_from = prefix
+										if prefix_from and prefix_to:
+											conversions.append((prefix_from, prefix_to))
+									# Any conversions from remote end?
+									if 'mapped_share_paths' in self.get_compute()['parameters']:
+										for d in self.get_compute()['parameters']['mapped_share_paths']:
+											conversions.append((d['remote'], self.normalize_path(d['local'])))
+									Common.info("Lock aquired, parsing scene(conversions: %s)..."%(conversions))
+									try:
+										with open(p_input, "r") as f_src:
+											with open(p_input_localized, "w") as f_dst:
+												self.convert_input(f_src, f_dst, conversions)
+										# Write metadata
+										with open(p_localized_metadata, "w") as f:
+											json.dump({'size':os.path.getsize(p_input),'time':os.path.getmtime(p_input)}, f)
+									finally:
+										if os.path.exists(p_localize_lock):
+											os.remove(p_localize_lock)
+											Common.info("Released lock @ '%s'..."%(p_localize_lock))
+								else:
+									Common.info("Another node grabbed the lock after me, aborting localize: %s"%(the_hostname))
+									other_is_localizing = True
+							else:
+								Common.warning("Lock file dissappeared during vote, must have been a quick localize!")
+						else:
+							other_is_localizing = True
+						if other_is_localizing:
+							other_hostname = "?"
+							try:
+								other_hostname = open(p_localize_lock, "r").read().strip()
+							except:
+								Common.warning(traceback.format_exc())
+							Common.warning("Another machine is already localizing(%s), waiting for it to finish..."%(other_hostname))
+							while os.path.exists(p_localize_lock):
+								time.sleep(1)
+					else:
+						Common.info("Using up-to-date localized scene (size: %s, mtime: %s)"%(os.path.getsize(p_input_localized), datetime.datetime.fromtimestamp(os.path.getmtime(p_input_localized))))
+					# Use this from now on
+					self.get_compute()['input'] = p_input_localized
+			else:
+				Common.debug('Not attempting to localize input file, input_conversion={}'.format(input_conversion))
+
+
 	def get_common_envs(self):
 		return self.get_envs()
 
@@ -286,6 +528,7 @@ class Common(object):
 
 	def execute(self):
 		''' Compute '''
+		self.prepare()
 		commands = self.get_commandline(self.item)
 		#def execute(commands, shell=False, log=False, log_standout=True, timeout=None, fetch_output=True, fetch_stderr=True, continue_on_error=False, exit_signaler=None, force_print=False, stdin=None, env=None, output_file=None, dry_run=False, su_user=None, squeeze_non_us_chars=True):
 		if commands is None or len(commands)==0:
