@@ -32,7 +32,7 @@ except ImportError,e:
 
 class App(Common):
 
-	__revision__ = 2 # Increment this after each update
+	__revision__ = 3 # Increment this after each update
 	
 	# App configuration
 	# IMPORTANT NOTE:
@@ -49,12 +49,13 @@ class App(Common):
 
 	PARAMETERS = {
 		"project" : "", 
-		"arguments" : "-r vray"
+		"arguments" : "-r vray",
+		"input_conversion": "always"
 	}
 
 	ENVS = {
 	}
-
+	
 	LIB_REF_SIZE = 46953984
 
 	# -- APP CONFIG END --
@@ -118,12 +119,10 @@ class App(Common):
 		args=[]
 		if 'parameters' in self.get_compute():
 			parameters = self.get_compute()['parameters']
-
 			if 0<len(parameters.get('arguments') or ""):
 				arguments = parameters['arguments']
 				if 0<len(arguments):
 					args.extend(arguments.split(" "))
-
 			if 'project' in parameters and 0<len(parameters['project']):
 				args.extend(['-proj',self.normalize_path(parameters['project'])])
 			if 'renderlayer' in parameters:

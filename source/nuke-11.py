@@ -28,28 +28,24 @@ import time
 try:
 	from common import Common 
 except ImportError,e:
-	print >> sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s"%e
+	print >> sys.stderr, 'Cannot import accsyn common app (required), make sure to name it'
+	' "common.py" add its parent directory to PYTHONPATH. Details: %s'%e
 	raise
 
 class App(Common):
 
-	__revision__ = 3 # Will be automatically increased each publish
+	__revision__ = 4 # Will be automatically increased each publish
 
 
 	# App configuration
 	#
 	# IMPORTANT NOTE:
-	#   This section defines app behaviour and should not be refactored or moved away from the enclosing START/END markers. Read into memory by cloud at start and publish. 
+	#   This section defines app behaviour and should not be refactored or moved away from the 
+	# enclosing START/END markers. Read into memory by cloud at start and publish. See Common.py
+	# for setting and parameter descriptions.
 	#
 
 	# -- APP CONFIG START --
-
-	# Can be retreived during execution from: self.get_compute()['settings']
-	#  - items; If true, each inpit file can be split and executed in ranges (render)
-	#  - default_range; (items) The default item range.
-	#  - default_bucketsize; The default amount of items to dispatch to each compute node/machone.
-	#  - filename_extensions: Comma(,) separated list of filename extensions associated with app.
-	#  - binary_filename_extensions: Comma(,) separated list of filename extensions that indicated a binary non parseable format.
 
 	SETTINGS = {
 		"items" : True, 
@@ -59,25 +55,15 @@ class App(Common):
 		"binary_filename_extensions" : ""
 	}
 
-	# Can be retreived during execution from: self.get_compute()['parameters']
-	# - arguments; The additional command line arguments to pass on to app.
-	#  - remote_os; The operating system ("windows", "linux" or "mac") on machine that submitted the job, used for parsing below.
-	#  - input_conversion; Define what kind of input file path conversion should happen on compute cluster (non binary formats only): 
-	#    * 'always' - expect that the input files always needs paths converted - contains local share mapped paths.
-	#    * 'platform' - all paths are assumed being relative root share, not conversion needed except when switching platform (and platform path prefixes differs).
-	#    * 'never' - all paths are assumed being relative root share and works on all platforms, or are relative and do need conversion.
-	#  - mapped_share_paths(input_conversion=always); List of dicts on the form {'remote':'D:\\PROJECTS\\MYSHARE','global':"share=root_share_id/share_path"}, used during input file parsing.
-
 	PARAMETERS = {
-		"remote_os": "unknown",
-		"input_conversion": "always",
 		"mapped_share_paths": [],
-		"arguments" : "-txV"
+		"arguments" : "-txV",
+		"input_conversion" : "auto"
 	}
 
 	# -- APP CONFIG END --
 
-	NUKE_VERSION = "11"
+	NUKE_VERSION = '11'
 	
 	def __init__(self, argv):
 		super(App, self).__init__(argv)
@@ -87,24 +73,33 @@ class App(Common):
 	def get_path_version_name():
 		p = os.path.realpath(__file__)
 		parent = os.path.dirname(p)
-		return (os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0])
+		return (
+			os.path.dirname(parent), 
+			os.path.basename(parent), 
+			os.path.splitext(os.path.basename(p))[0])
 
 	@staticmethod
 	def version():
 		(unused_cp, cv, cn) = Common.get_path_version_name()
 		(unused_p, v, n) = App.get_path_version_name()
-		Common.info("   Accsyn compute app '%s' v%s-%s(common: v%s-%s) "%(n, v, App.__revision__, cv, Common.__revision__))
+		Common.info('   Accsyn compute app "{}" v{}-{}(common: v{}-{}) '.format(
+			n, 
+			v, 
+			App.__revision__, 
+			cv, 
+			Common.__revision__))
 
 	@staticmethod
 	def usage():
 		(unused_p, unused_v, name) = App.get_path_version_name()
-		Common.info("")
-		Common.info("   Usage: python %s {--probe|<path_json_data>}"%name)
-		Common.info("")
-		Common.info("       --probe           Have app check if it is found and of correct version.")
-		Common.info("")
-		Common.info("       <path_json_data>  Execute app on data provided in the JSON and FILMHUB_xxx environment variables.")
-		Common.info("")
+		Common.info('')
+		Common.info('   Usage: python %s {--probe | <path_json_data>}'%(name))
+		Common.info('')
+		Common.info('       --probe           Check app existance and version.')
+		Common.info('')
+		Common.info('       <path_json_data>  Execute app on data provided in the JSON and'
+			' ACCSYN_xxx environment variables.')
+		Common.info('')
 
 	def probe(self):
 		''' (Optional) Do nothing if found, raise execption otherwise. '''
@@ -134,28 +129,36 @@ class App(Common):
 						dirname = sorted(candidates)[-1]
 					return os.path.join(p_base, dirname)
 				else:
-					raise Exception("No {} application version found on system!".format(prefix))
+					raise Exception('No {} application version found on system!'.format(prefix))
 			else:
-				raise Exception("Application base directory '{}' not found on system!".format(p_base))
+				raise Exception('Application base directory "{}" not found on system!'.format(
+					p_base))
 
 		# Use highest version
 		p_base = p_app = None
 		if Common.is_lin():
-			p_base = "/usr/local"
-			p_app = find_executable(p_base, "Nuke{}".format(App.NUKE_VERSION))
+			p_base = '/usr/local'
+			p_app = find_executable(p_base, 'Nuke{}'.format(App.NUKE_VERSION))
 		elif Common.is_mac():
-			p_base = "/Applications"
-			p_app = find_executable(p_base, "Nuke{}".format(App.NUKE_VERSION))
+			p_base = '/Applications'
+			p_app = find_executable(p_base, 'Nuke{}'.format(App.NUKE_VERSION))
 		elif Common.is_win():
-			p_base = "C:\\Program Files"
-			p_app = find_executable(p_base, "Nuke{}".format(App.NUKE_VERSION))
+			p_base = 'C:\\Program Files'
+			p_app = find_executable(p_base, 'Nuke{}'.format(App.NUKE_VERSION))
 		if p_app:
 			if Common.is_mac():
-				return os.path.join(p_app, '{}.app'.format(os.path.basename(p_app)), "Contents", "MacOS", os.path.basename(p_app))
+				return os.path.join(
+					p_app, 
+					'{}.app'.format(os.path.basename(p_app)), 
+					'Contents', 
+					'MacOS', 
+					os.path.basename(p_app))
 			else:
-				return os.path.join(p_app, "nuke{}{}".format(App.NUKE_VERSION, ".exe" if Common.is_win() else ""))
+				return os.path.join(
+					p_app, 
+					'nuke{}{}'.format(App.NUKE_VERSION, '.exe' if Common.is_win() else ''))
 		else:
-			raise Exception("Nuke not supported on this platform!")
+			raise Exception('Nuke not supported on this platform!')
 
 	def get_commandline(self, item):
 		''' (REQUIRED) Return command line as a string array '''
@@ -164,23 +167,23 @@ class App(Common):
 		if 'parameters' in self.get_compute():
 			parameters = self.get_compute()['parameters']
 
-			if 0<len(parameters.get('arguments') or ""):
+			if 0<len(parameters.get('arguments') or ''):
 				arguments = parameters['arguments']
 				if 0<len(arguments):
-					args.extend(arguments.split(" "))
+					args.extend(arguments.split(' '))
 
 			# Grab a workstation license?
 			hostname = socket.gethostname().lower()
-			if hostname.find("a")==0 or hostname.find("b")==0 or hostname.find("c")==0:
-				args.append("-i")
-		if self.item and self.item != "all":
+			if hostname.find('a')==0 or hostname.find('b')==0 or hostname.find('c')==0:
+				args.append('-i')
+		if self.item and self.item != 'all':
 			# Add range
 			start = end = self.item
-			if -1<self.item.find("-"):
-				parts = self.item.split("-")
+			if -1<self.item.find('-'):
+				parts = self.item.split('-')
 				start = parts[0]
 				end = parts[1]
-			args.extend(["-F", "%s-%s"%(start, end)])
+			args.extend(['-F', '%s-%s'%(start, end)])
 
 		input_path = self.normalize_path(self.data['compute']['input'])
 		args.extend([input_path])
@@ -189,15 +192,18 @@ class App(Common):
 		#   version 10.0 v6
 		#   define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 		preferred_nuke_version = None
-		with open(input_path, "r") as f_input:
+		with open(input_path, 'r') as f_input:
 			for line in f_input:
 				if line.startswith('version '):
 					#  version 10.0 v6
-					preferred_nuke_version = line[8:].replace(" ","")
-					Common.info("Parsed Nuke version: '%s'"%preferred_nuke_version)
+					preferred_nuke_version = line[8:].replace(' ','')
+					Common.info('Parsed Nuke version: "%s"'%preferred_nuke_version)
 
 		if Common.is_lin():
-			retval = ["/bin/bash", "-c", self.get_executable(preferred_nuke_version=preferred_nuke_version)]
+			retval = [
+				'/bin/bash', 
+				'-c', 
+				self.get_executable(preferred_nuke_version=preferred_nuke_version)]
 			retval.extend(args)
 			return retval
 		elif Common.is_mac():
@@ -209,15 +215,19 @@ class App(Common):
 			retval.extend(args)
 			return retval
 
-		raise Exception("This OS is not recognized by this Accsyn app!")
+		raise Exception('This OS is not recognized by this Accsyn app!')
 
 	def process_output(self, stdout, stderr):
-		''' Sift through stdout/stderr and take action, return exitcode instead of None if should abort '''
+		''' 
+		Sift through stdout/stderr and take action, return exitcode instead of None if should
+		 abort 
+		 '''
 		sys.stdout.flush()
 		def check_stuck_render():
 			while self.executing:
 				time.sleep(1.0)
-				if self.executing and not self.date_finish_expire is None and self.date_finish_expire<datetime.datetime.now():
+				if self.executing and not self.date_finish_expire is None and\
+				 self.date_finish_expire<datetime.datetime.now():
 					Common.warning('Nuke finished but still running (hung?), finishing up.')
 					self.exitcode_force = 0
 					self.kill()
@@ -232,13 +242,13 @@ class App(Common):
 
 if __name__ == '__main__':
 	App.version()
-	if "--help" in sys.argv:
+	if '--help' in sys.argv:
 		App.usage()
 	else:
 		#Common.set_debug(True)
 		try:
 			app = App(sys.argv)
-			if "--probe" in sys.argv:
+			if '--probe' in sys.argv:
 				app.probe()
 			else:
 				app.load() # Load data
