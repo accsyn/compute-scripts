@@ -40,7 +40,7 @@ except ImportError as e:
 
 class App(Common):
 
-    __revision__ = 4 # Will be automatically increased each publish
+    __revision__ = 5 # Will be automatically increased each publish
 
 
     # App configuration
@@ -221,6 +221,7 @@ class App(Common):
                     #  version 10.0 v6
                     preferred_nuke_version = line[8:].replace(' ','').strip()
                     Common.info('Parsed Nuke version: "%s"'%preferred_nuke_version)
+                    break
 
         if Common.is_lin():
             retval = [
