@@ -1,21 +1,18 @@
 ''' 
 
-    Nuke v12 accsyn compute app script.
+    Nuke v13 accsyn compute app script.
 
     Finds and executes Nuke by building a commandline out of 'item'(frame number)
     and parameters provided.
 
     Changelog:
 
-        * v1r4; Python 3 compliance. Convert windows paths to Nuke (/) during input file conversion.
-        * v1r3; Code style
-        * v1r2; Parse Nuke output and finish render if hangs 5s on "Total render time:"
-        * v1r1; Compliance to accsyn v1.4.
+        * v1r1; First version.
 
     This software is provided "as is" - the author and distributor can not be held 
     responsible for any damage caused by executing this script in any means.
 
-    Author: Henrik Norin, HDR AB
+    Author: Henrik Norin, accsyn / HDR AB
 
 '''
 
@@ -43,7 +40,7 @@ except ImportError as e:
 
 class App(Common):
 
-    __revision__ = 5  # Will be automatically increased each publish
+    __revision__ = 2  # Will be automatically increased each publish
 
     # App configuration
     #
@@ -67,7 +64,7 @@ class App(Common):
 
     # -- APP CONFIG END --
 
-    NUKE_VERSION = '12'
+    NUKE_VERSION = '13'
 
     def __init__(self, argv):
         super(App, self).__init__(argv)
@@ -84,7 +81,7 @@ class App(Common):
         (unused_cp, cv, cn) = Common.get_path_version_name()
         (unused_p, v, n) = App.get_path_version_name()
         Common.info(
-            '   accsyn compute app "{}" v{}-{}(common: v{}-{}) '.format(
+            '   accsyn compute app "{0}" v{1}-{2}(common: v{3}-{4}) '.format(
                 n, v, App.__revision__, cv, Common.__revision__
             )
         )
@@ -140,7 +137,7 @@ class App(Common):
                     p_executable_rel = None
                     # Find executable
                     if Common.is_mac():
-                        p_executable_rel = os.path.join('{}.app'.format(dirname), 'Contents', 'MacOS')
+                        p_executable_rel = os.path.join('{0}.app'.format(dirname), 'Contents', 'MacOS')
                         p_search_executable = os.path.join(p_app, p_executable_rel)
                     else:
                         p_search_executable = p_app
@@ -149,14 +146,14 @@ class App(Common):
                             if Common.is_win() and not fn.lower().endswith('.exe'):
                                 continue
                             p_executable_rel = (
-                                '{}{}'.format(p_executable_rel, os.sep) if p_executable_rel else ""
+                                '{0}{1}'.format(p_executable_rel, os.sep) if p_executable_rel else ""
                             ) + fn
                             break
                     return p_app, p_executable_rel
                 else:
-                    raise Exception('No {} application version found on system!'.format(prefix))
+                    raise Exception('No {0} application version found on system!'.format(prefix))
             else:
-                raise Exception('Application base directory "{}" not found on system!'.format(p_base))
+                raise Exception('Application base directory "{0}" not found on system!'.format(p_base))
 
         # Use highest version
         p_base = p_app = None
@@ -167,15 +164,11 @@ class App(Common):
         elif Common.is_win():
             p_base = 'C:\\Program Files'
         if p_base:
-            if p_executable_rel is None:
-                raise Exception('Nuke executable not found, looked in {}!'.format(p_app))
-            p_app, p_executable_rel = find_executable(p_base, 'Nuke{}'.format(App.NUKE_VERSION))
+            p_app, p_executable_rel = find_executable(p_base, 'Nuke{0}'.format(App.NUKE_VERSION))
+        if p_executable_rel is None:
+            raise Exception('Nuke executable not found, looked in {0}!'.format(p_app))
         if p_app:
-            return os.path.join(
-                p_app,
-                #'nuke{}{}'.format(App.NUKE_VERSION, '.exe' if Common.is_win() else ''))
-                p_executable_rel,
-            )
+            return os.path.join(p_app, p_executable_rel)
         else:
             raise Exception('Nuke not supported on this platform!')
 
