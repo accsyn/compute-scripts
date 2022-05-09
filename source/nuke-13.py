@@ -7,6 +7,7 @@
 
     Changelog:
 
+        * v1r2; Fixed bug where p_executable_rel was not found.
         * v1r1; First version.
 
     This software is provided "as is" - the author and distributor can not be held 
@@ -57,7 +58,7 @@ class App(Common):
         "default_range": "1001-1100",
         "default_bucketsize": 5,
         "filename_extensions": ".nk",
-        "binary_filename_extensions": "",
+        "binary_filename_extensions": ""
     }
 
     PARAMETERS = {"mapped_share_paths": [], "arguments": "-txV", "input_conversion": "auto"}
@@ -163,6 +164,7 @@ class App(Common):
             p_base = '/Applications'
         elif Common.is_win():
             p_base = 'C:\\Program Files'
+        p_executable_rel = None
         if p_base:
             p_app, p_executable_rel = find_executable(p_base, 'Nuke{0}'.format(App.NUKE_VERSION))
         if p_executable_rel is None:

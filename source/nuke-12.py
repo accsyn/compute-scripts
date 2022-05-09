@@ -140,7 +140,7 @@ class App(Common):
                     p_executable_rel = None
                     # Find executable
                     if Common.is_mac():
-                        p_executable_rel = os.path.join('{}.app'.format(dirname), 'Contents', 'MacOS')
+                        p_executable_rel = os.path.join('{0}.app'.format(dirname), 'Contents', 'MacOS')
                         p_search_executable = os.path.join(p_app, p_executable_rel)
                     else:
                         p_search_executable = p_app
@@ -149,14 +149,14 @@ class App(Common):
                             if Common.is_win() and not fn.lower().endswith('.exe'):
                                 continue
                             p_executable_rel = (
-                                '{}{}'.format(p_executable_rel, os.sep) if p_executable_rel else ""
+                                '{0}{1}'.format(p_executable_rel, os.sep) if p_executable_rel else ""
                             ) + fn
                             break
                     return p_app, p_executable_rel
                 else:
-                    raise Exception('No {} application version found on system!'.format(prefix))
+                    raise Exception('No {0} application version found on system!'.format(prefix))
             else:
-                raise Exception('Application base directory "{}" not found on system!'.format(p_base))
+                raise Exception('Application base directory "{0}" not found on system!'.format(p_base))
 
         # Use highest version
         p_base = p_app = None
@@ -166,16 +166,13 @@ class App(Common):
             p_base = '/Applications'
         elif Common.is_win():
             p_base = 'C:\\Program Files'
+        p_executable_rel = None
         if p_base:
-            if p_executable_rel is None:
-                raise Exception('Nuke executable not found, looked in {}!'.format(p_app))
-            p_app, p_executable_rel = find_executable(p_base, 'Nuke{}'.format(App.NUKE_VERSION))
+            p_app, p_executable_rel = find_executable(p_base, 'Nuke{0}'.format(App.NUKE_VERSION))
+        if p_executable_rel is None:
+            raise Exception('Nuke executable not found, looked in {0}!'.format(p_app))
         if p_app:
-            return os.path.join(
-                p_app,
-                #'nuke{}{}'.format(App.NUKE_VERSION, '.exe' if Common.is_win() else ''))
-                p_executable_rel,
-            )
+            return os.path.join(p_app, p_executable_rel)
         else:
             raise Exception('Nuke not supported on this platform!')
 

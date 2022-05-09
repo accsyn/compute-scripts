@@ -327,8 +327,11 @@ class Common(object):
 
         if mkdirs:
             if not os.path.exists(p):
-                os.makedirs(p)
-                self.warning('Created missing folder: "{0}"'.format(p))
+                try:
+                    os.makedirs(p)
+                    self.warning('Created missing folder: "{0}"'.format(p))
+                except:
+                    self.warning(traceback.format_exc())
             else:
                 self.info('Folder "{0}" exists.'.format(p))
         return p
