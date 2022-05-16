@@ -53,7 +53,7 @@ class App(Common):
         "default_range": "1001-1100",
         "default_bucketsize": 1,
         "filename_extensions": ".blend",
-        "binary_filename_extensions": ".blend"
+        "binary_filename_extensions": ".blend",
     }
 
     PARAMETERS = {"arguments": "-b", "input_conversion": "always"}
@@ -67,7 +67,6 @@ class App(Common):
 
     # Do not launch if installed blender version does not matches version above
     CHECK_BLENDER_VERSION = True
-
 
     def __init__(self, argv):
         super(App, self).__init__(argv)
@@ -126,19 +125,30 @@ class App(Common):
                 if not os.path.exists(path_executable):
                     raise Exception(
                         "Blender {} not found or is not the correct installed version on this Linux station!".format(
-                            App.BLENDER_VERSION))
+                            App.BLENDER_VERSION
+                        )
+                    )
             elif Common.is_mac():
                 path_info_plist = os.path.join(os.path.dirname(os.path.dirname(path_executable)), 'Info.plist')
-                Common.info('Checking for Blender version string "{}" within {}'.format(App.BLENDER_VERSION, path_info_plist))
-                if not os.path.exists(path_info_plist) or (open(path_info_plist, 'r').read()).find(App.BLENDER_VERSION) == -1:
+                Common.info(
+                    'Checking for Blender version string "{}" within {}'.format(App.BLENDER_VERSION, path_info_plist)
+                )
+                if (
+                    not os.path.exists(path_info_plist)
+                    or (open(path_info_plist, 'r').read()).find(App.BLENDER_VERSION) == -1
+                ):
                     raise Exception(
                         "Blender {} not found or is not the correct installed version on this Mac!".format(
-                            App.BLENDER_VERSION))
+                            App.BLENDER_VERSION
+                        )
+                    )
             elif Common.is_win():
                 if not os.path.exists(path_executable):
                     raise Exception(
                         "Blender {} not found or is not the correct installed version on this PC!".format(
-                            App.BLENDER_VERSION))
+                            App.BLENDER_VERSION
+                        )
+                    )
 
         args = ['-b']
         # Input has already been converted to local platform

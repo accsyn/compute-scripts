@@ -138,10 +138,11 @@ class App(Common):
                         break
                     else:
                         dll_size_mismatch = dll_size
-                assert (dll_size_mismatch is None), (
-                            "V-ray for Maya {} is not the correct installed version on this node (DLL size:{})!".format(
-                                App.VRAY_VERSION,
-                                os.path.getsize(dll_size_mismatch)))
+                assert (
+                    dll_size_mismatch is None
+                ), "V-ray for Maya {} is not the correct installed version on this node (DLL size:{})!".format(
+                    App.VRAY_VERSION, os.path.getsize(dll_size_mismatch)
+                )
 
         args = []
         if "parameters" in self.get_compute():

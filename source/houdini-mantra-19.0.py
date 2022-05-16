@@ -23,7 +23,7 @@ try:
         sys.path.append(os.environ['ACCSYN_COMPUTE_COMMON_PATH'])
     from common import Common
 except ImportError as e:
-    print >> sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
+    print >>sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
     raise
 
 
@@ -40,15 +40,12 @@ class App(Common):
         "default_range": "1001-1100",
         "default_bucketsize": 1,
         "max_bucketsize": 1,
-        "filename_extensions": ".ifd"
+        "filename_extensions": ".ifd",
     }
 
-    PARAMETERS = {
-        "arguments": "-V 2p"
-    }
+    PARAMETERS = {"arguments": "-V 2p"}
 
-    ENVS = {
-    }
+    ENVS = {}
 
     # -- APP CONFIG END --
     # -- Stop edit here
@@ -58,18 +55,19 @@ class App(Common):
 
     @staticmethod
     def get_path_version_name():
-        ''' Don't touch this '''
+        '''Don't touch this'''
         p = os.path.realpath(__file__)
         parent = os.path.dirname(p)
         return (os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0])
 
     @staticmethod
     def usage():
-        ''' Don't touch this '''
+        '''Don't touch this'''
         (unused_cp, cv, cn) = Common.get_path_version_name()
         (unused_p, v, n) = App.get_path_version_name()
         Common.info(
-            "   Accsyn compute app '%s' v%s-%s(common: v%s-%s) " % (n, v, App.__revision__, cv, Common.__revision__))
+            "   Accsyn compute app '%s' v%s-%s(common: v%s-%s) " % (n, v, App.__revision__, cv, Common.__revision__)
+        )
         Common.info("")
         Common.info("   Usage: python %s {--probe|<path_json_data>}" % n)
         Common.info("")
@@ -79,13 +77,14 @@ class App(Common):
         Common.info("       --probe           Have app check if it is found and of correct version.")
         Common.info("")
         Common.info(
-            "       <path_json_data>  Execute app on data provided in the JSON and ACCSYN_xxx environment variables.")
+            "       <path_json_data>  Execute app on data provided in the JSON and ACCSYN_xxx environment variables."
+        )
         Common.info("")
 
     def probe(self):
-        ''' (Optional) Do nothing if found, raise execption otherwise. '''
+        '''(Optional) Do nothing if found, raise execption otherwise.'''
         exe = self.get_executable()
-        assert (os.path.exists(exe)), ("'%s' does not exist!" % exe)
+        assert os.path.exists(exe), "'%s' does not exist!" % exe
         # TODO, check if correct versions of dependencies
         return True
 
@@ -93,7 +92,7 @@ class App(Common):
     # --- Start edit here
 
     def get_executable(self):
-        ''' (REQUIRED) Return path to executable as string '''
+        '''(REQUIRED) Return path to executable as string'''
         if not Common._dev:
             if Common.is_lin():
                 # return "/opt/hfs18.0.597/bin/mantra"
@@ -111,7 +110,7 @@ class App(Common):
                 return Exception("Houdini dev app not supported on Windows yet!")
 
     def get_envs(self):
-        ''' Get site specific envs '''
+        '''Get site specific envs'''
         result = {}
         return result
 
@@ -127,8 +126,9 @@ class App(Common):
             if 'arguments' in parameters:
                 args.extend([parameters['arguments']])
         if 'output' in self.data['compute']:
-            path_output = self.normalize_path(self.data['compute']['output'],
-                                              mkdirs=True)  # Do this so folder is created
+            path_output = self.normalize_path(
+                self.data['compute']['output'], mkdirs=True
+            )  # Do this so folder is created
             self.debug("Rendering to '%s'" % path_output)
         args.extend(["-f", self.normalize_path(path_input)])
 
@@ -144,7 +144,7 @@ class App(Common):
         raise Exception("This OS is not recognized by this Accsyn app!")
 
     def get_creation_flags(self, item):
-        ''' Always run on low priority on windows '''
+        '''Always run on low priority on windows'''
         if Common.is_win():
             ABOVE_NORMAL_PRIORITY_CLASS = 0x00008000
             BELOW_NORMAL_PRIORITY_CLASS = 0x00004000

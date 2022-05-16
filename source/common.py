@@ -5,9 +5,12 @@
 
     Changelog:
 
-        * v1r23; (Henrik Norin, upcoming) Lock taken on clearing output directory.
-        * v1r22; (Henrik Norin, upcoming) Support for clearing out output directoru before render starts.
-        * v1r21; (Henrik Norin, upcoming) Python backward compability, code style.
+        * v1r25; (Henrik Norin, 22.05.12) Separate render app output (public) from accsyn script output (non restricted user accessible)
+        * v1r24; (Henrik Norin, 22.05.09) (Localization) An additional convert_path call if a line contains
+            path delimiters, mostly for fully converting Nuke scripts.
+        * v1r23; (Henrik Norin, 22.05.09) Lock taken on clearing output directory.
+        * v1r22; (Henrik Norin, 22.05.09) Support for clearing out output directoru before render starts.
+        * v1r21; (Henrik Norin, 22.05.09) Python backward compability, code style.
         * v1r20; (Henrik Norin, 21.12.16) Convert input; properly concat paths having multiple slashes.
         * v1r19; (Henrik Norin, 21.12.16) Support multiple output paths
         * v1r16; (Henrik Norin) Fixed Windows path conversion bug.
@@ -45,7 +48,7 @@ logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, d
 
 class Common(object):
 
-    __revision__ = 23  # Will be automatically increased each publish.
+    __revision__ = 25  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -399,12 +402,12 @@ class Common(object):
     def convert_input(self, f_src, f_dst, conversions):
         '''Basic ASCII file path conversion, should be overridden by app to
         support more. Raise an exception is localization fails.'''
-        raise Exception('Would have converted {}, conversions: {}'.format(f_src, conversions))
         line_no = 1
         for line in f_src:
             try:
                 for (path_from, path_to) in conversions:
                     while True:
+                        line_orig = str(line)
                         idx = line.lower().find(path_from.lower())
                         if idx == -1:
                             if -1 < path_from.find('\\') and -1 < line.find('/'):
@@ -415,11 +418,13 @@ class Common(object):
                                 idx = line.lower().find(path_from.replace('/', '\\').lower())
                         if idx == -1:
                             break
-                        line_orig = str(line)
                         line = (line[0:idx] if 0 < idx else "") + Common.concat_paths(
                             self.convert_path(path_to),
                             (line[idx + len(path_from) :] if idx + len(path_from) < len(line) else ""),
                         )
+                    if -1 < line.find('/') or -1 < line.find('\\'):
+                        line = self.convert_path(line)
+                    if line != line_orig:
                         self.info('(input convert) "{0}">"{1}"'.format(line_orig, line))
             except:
                 logging.warning(traceback.format_exc())
@@ -476,11 +481,12 @@ class Common(object):
         self.debug("Data loaded:\n{0}".format(json.dumps(self.data, indent=3)))
 
     def take_lock(self, base_path, operation):
-        ''' Return True if we can take a lock on a file operation.'''
+        '''Return True if we can take a lock on a file operation.'''
         other_is_localizing = False
         hostname = socket.gethostname()
-        lock_path = os.path.join(os.path.dirname(base_path),
-                                 "{0}.{1}_lock".format(os.path.basename(base_path), operation))
+        lock_path = os.path.join(
+            os.path.dirname(base_path), "{0}.{1}_lock".format(os.path.basename(base_path), operation)
+        )
         Common.info("Checking {0} lock @ '{1}'...".format(operation, lock_path))
         if os.path.exists(lock_path):
             # Is it me?
@@ -490,7 +496,9 @@ class Common(object):
             except:
                 Common.warning(traceback.format_exc())
             if other_hostname == hostname:
-                Common.warning("Removing previous lock file @ '{0}' created by me, killed in action?".format(lock_path))
+                Common.warning(
+                    "Removing previous lock file @ '{0}' created by me, killed in action?".format(lock_path)
+                )
                 os.remove(lock_path)
         if not os.path.exists(lock_path):
             # Attempt to take
@@ -511,7 +519,8 @@ class Common(object):
                     return (True, lock_path)
                 else:
                     Common.info(
-                        "Another node grabbed the lock after me, aborting {0}: {0}".format(operation, the_hostname))
+                        "Another node grabbed the lock after me, aborting {0}: {0}".format(operation, the_hostname)
+                    )
                     other_is_localizing = True
             else:
                 Common.warning("Lock file disappeared during vote, must have been a quick {0}!".format(operation))
@@ -525,13 +534,15 @@ class Common(object):
                 Common.warning(traceback.format_exc())
             Common.warning(
                 "(Localization) Another machine is already doing {0}({1}), waiting for it to finish...".format(
-                    operation, other_hostname))
+                    operation, other_hostname
+                )
+            )
             while os.path.exists(lock_path):
                 time.sleep(1)
         return (False, lock_path)
 
     def prepare(self):
-        ''' Prepare execution - localize files. '''
+        '''Prepare execution - localize files.'''
         # Any input file?
         p_input = None
         if 'input' in self.get_compute():
@@ -550,38 +561,46 @@ class Common(object):
                     if input_conversion == 'auto':
                         # Set to always if any paths supplied
                         if 'mapped_share_paths' in self.get_compute()['parameters'] and 0 < len(
-                                self.get_compute()['parameters']['mapped_share_paths']):
+                            self.get_compute()['parameters']['mapped_share_paths']
+                        ):
                             Common.info(
-                                '(Localization) Mapped share paths supplied, applying "always" input conversion mode.')
+                                '(Localization) Mapped share paths supplied, applying "always" input conversion mode.'
+                            )
                             input_conversion = 'always'
                         else:
                             Common.info(
-                                '(Localization) No mapped share paths supplied, appling "platform" input conversion mode.')
+                                '(Localization) No mapped share paths supplied, appling "platform" input conversion mode.'
+                            )
                             input_conversion = 'platform'
                     if input_conversion == 'never':
                         Common.info('(Localization) Not attempting to localize input file, input conversion disabled.')
                     else:
                         # Is an ASCII parsable format?
                         is_binary_format = False
-                        binary_filename_extensions = self.SETTINGS.get(
-                            'binary_filename_extensions')
+                        binary_filename_extensions = self.SETTINGS.get('binary_filename_extensions')
                         if 0 < len(binary_filename_extensions or ""):
                             if -1 < p_input.find('.'):
                                 ext = os.path.splitext(p_input)[1]
                                 if binary_filename_extensions == "*" or -1 < binary_filename_extensions.lower().find(
-                                        ext.lower()):
+                                    ext.lower()
+                                ):
                                     # No, this is a binary format - cannot localize
                                     Common.info(
                                         'Input file "{}" is a binary format - not attempting to localize...'.format(
-                                            p_input))
+                                            p_input
+                                        )
+                                    )
                                     is_binary_format = True
                                 else:
                                     Common.info(
                                         'Input file "{}" is a ASCII format - extension {} does not match {}...'.format(
-                                            p_input, ext, binary_filename_extensions))
+                                            p_input, ext, binary_filename_extensions
+                                        )
+                                    )
                             else:
                                 Common.info(
-                                    '(Localization) input file does not have any extension, cannot determine if not binary format and in need of localization...')
+                                    '(Localization) input file does not have any extension, cannot determine if not binary format and in need of localization...'
+                                )
                                 is_binary_format = True
                         else:
                             Common.info('All file formats are ASCII (no "binary_filename_extensions" in config)')
@@ -589,8 +608,9 @@ class Common(object):
                             p_input_localized = p_input
                             p_input_prefix, p_localized_ext = os.path.splitext(p_input)
                             if input_conversion == 'always':
-                                p_input_localized = '{}_accsynlocalized_hq_{}{}'.format(p_input_prefix, self.get_os(),
-                                                                                        p_localized_ext)
+                                p_input_localized = '{}_accsynlocalized_hq_{}{}'.format(
+                                    p_input_prefix, self.get_os(), p_localized_ext
+                                )
                             elif input_conversion == 'platform':
                                 remote_os = self.get_remote_os()
                                 if remote_os != self.get_os():
@@ -606,27 +626,38 @@ class Common(object):
                                             break
                                     if remote_prefix and local_prefix:
                                         if remote_prefix != local_prefix:
-                                            p_input_localized = '{}_accsynlocalzed_hq_{}{}'.format(p_input_prefix,
-                                                                                                   self.get_os(),
-                                                                                                   p_localized_ext)
+                                            p_input_localized = '{}_accsynlocalzed_hq_{}{}'.format(
+                                                p_input_prefix, self.get_os(), p_localized_ext
+                                            )
                                             Common.info(
                                                 '(Localization) Remote root share path prefix ({}) and local ({}) differs, need to localize!'.format(
-                                                    remote_prefix, local_prefix))
+                                                    remote_prefix, local_prefix
+                                                )
+                                            )
                                         else:
                                             Common.info(
                                                 '(Localization) Remote root share path prefix ({}) and local ({}) are the same, no need to localize...'.format(
-                                                    remote_prefix, local_prefix))
+                                                    remote_prefix, local_prefix
+                                                )
+                                            )
                                     if remote_prefix is None:
                                         Common.warning(
                                             '(Localization) Do not know remote root share prefix on {}, cannot localize "{}"...'.format(
-                                                remote_os, p_input))
+                                                remote_os, p_input
+                                            )
+                                        )
                                     if local_prefix is None:
                                         Common.warning(
                                             '(Localization) Do not know local root share prefix on {}, cannot localize "{}"...'.format(
-                                                self.get_os(), p_input))
+                                                self.get_os(), p_input
+                                            )
+                                        )
                                 else:
-                                    Common.info('(Localization) On same platform({}), no need to convert path.'.format(
-                                        remote_os))
+                                    Common.info(
+                                        '(Localization) On same platform({}), no need to convert path.'.format(
+                                            remote_os
+                                        )
+                                    )
 
                             if p_input_localized != p_input:
                                 # Does it exist?
@@ -635,8 +666,9 @@ class Common(object):
                                 p_parent = os.path.dirname(p_input)
                                 # p_parent_localized = "%s.localized"%(p_parent)
                                 # p_input_localized = os.path.join(p_parent_localized,os.path.basename(p_input))
-                                p_localized_metadata = os.path.join(p_parent,
-                                                                    "%s.localized_metadata" % (os.path.basename(p_input)))
+                                p_localized_metadata = os.path.join(
+                                    p_parent, "%s.localized_metadata" % (os.path.basename(p_input))
+                                )
                                 do_localize = True
                                 localized_size = localized_mtime = None
                                 if os.path.exists(p_input_localized):
@@ -647,18 +679,21 @@ class Common(object):
                                         localized_mtime = d['time']
                                         if os.path.getsize(p_input) != localized_size:
                                             Common.warning(
-                                                "Localized file was based on input file that differs in size current (%s<>%s)!" % (
-                                                localized_size, os.path.getsize(p_input)))
+                                                "Localized file was based on input file that differs in size current (%s<>%s)!"
+                                                % (localized_size, os.path.getsize(p_input))
+                                            )
                                         elif os.path.getmtime(p_input) != localized_mtime:
                                             Common.warning(
-                                                "Localized file was based on input file that differs in modification time (%s<>%s)!" % (
-                                                localized_mtime, os.path.getmtime(p_input)))
+                                                "Localized file was based on input file that differs in modification time (%s<>%s)!"
+                                                % (localized_mtime, os.path.getmtime(p_input))
+                                            )
                                         else:
                                             # Localized is up to date
                                             do_localize = False
                                     else:
                                         Common.warning(
-                                            "Localized file metadata does not exist @ '%s'!" % p_localized_metadata)
+                                            "Localized file metadata does not exist @ '%s'!" % p_localized_metadata
+                                        )
                                 else:
                                     Common.warning("Localized file does not exist @ '%s'!" % p_input_localized)
                                 if do_localize:
@@ -676,43 +711,57 @@ class Common(object):
                                                         prefix_to = prefix
                                                     elif path_ident.lower() == self.get_remote_os().lower():
                                                         prefix_from = prefix
-                                                if len(prefix_from or '')>0 and len(prefix_to or '')>0:
+                                                if len(prefix_from or '') > 0 and len(prefix_to or '') > 0:
                                                     conversions.append((prefix_from, prefix_to))
                                             # Any conversions from remote end?
                                             if 'mapped_share_paths' in self.get_compute()['parameters']:
                                                 for d in self.get_compute()['parameters']['mapped_share_paths']:
-                                                    if len(d['remote'] or '')>0 and len(d['local'] or '')>0:
-                                                        conversions.append((d['remote'], self.normalize_path(d['local'])))
+                                                    if len(d['remote'] or '') > 0 and len(d['local'] or '') > 0:
+                                                        if not 'os' in d or d['os'] == self.get_remote_os().lower():
+                                                            conversions.append(
+                                                                (d['remote'], self.normalize_path(d['local']))
+                                                            )
                                             Common.info(
-                                                "Lock aquired, parsing input file (conversions: %s)..." % (conversions))
+                                                "Lock aquired, parsing input file (conversions: %s)..." % (conversions)
+                                            )
                                             with open(p_input, "r") as f_src:
                                                 with open(p_input_localized, "w") as f_dst:
                                                     self.convert_input(f_src, f_dst, conversions)
                                             # Write metadata
                                             with open(p_localized_metadata, "w") as f:
                                                 json.dump(
-                                                    {'size': os.path.getsize(p_input), 'time': os.path.getmtime(p_input)},
-                                                    f)
+                                                    {
+                                                        'size': os.path.getsize(p_input),
+                                                        'time': os.path.getmtime(p_input),
+                                                    },
+                                                    f,
+                                                )
                                         finally:
                                             if os.path.exists(p_localize_lock):
                                                 os.remove(p_localize_lock)
                                                 Common.info("Released lock @ '%s'..." % (p_localize_lock))
                                 else:
                                     Common.info(
-                                        "(Localization) Using up-to-date localized input file (size: %s, mtime: %s)" % (
-                                        os.path.getsize(p_input_localized),
-                                        datetime.datetime.fromtimestamp(os.path.getmtime(p_input_localized))))
+                                        "(Localization) Using up-to-date localized input file (size: %s, mtime: %s)"
+                                        % (
+                                            os.path.getsize(p_input_localized),
+                                            datetime.datetime.fromtimestamp(os.path.getmtime(p_input_localized)),
+                                        )
+                                    )
                                 # Use this from now on
                                 self.get_compute()['input'] = p_input_localized
                             else:
                                 Common.info(
-                                    '(Localization) No need to localize ({} == {}).'.format(p_input_localized, p_input))
+                                    '(Localization) No need to localize ({} == {}).'.format(p_input_localized, p_input)
+                                )
                 else:
                     Common.info(
-                        '(Localization) Not attempting to localize input file, no input_conversion in parameters.')
+                        '(Localization) Not attempting to localize input file, no input_conversion in parameters.'
+                    )
             else:
                 Common.warning(
-                    '(Localization) Not attempting to localize input file, null or not recognized as a path!')
+                    '(Localization) Not attempting to localize input file, null or not recognized as a path!'
+                )
         # Any output file?
         if 'output' in self.data['compute']:
             p_output = self.normalize_path(self.get_compute()['output'], mkdirs=True)
@@ -727,11 +776,11 @@ class Common(object):
                     parts = (cod or '').split(':')
                     if len(parts) == 2:
                         if parts[0] == 'site':
-                            do_clear_output = (parts[1].lower() == site_code.lower())
+                            do_clear_output = parts[1].lower() == site_code.lower()
                             if not do_clear_output:
                                 self.debug('Not clearing out output directory - not on site: {0}'.format(parts[1]))
                         elif parts[0] == '!site':
-                            do_clear_output = (parts[1].lower() != site_code.lower())
+                            do_clear_output = parts[1].lower() != site_code.lower()
                             if not do_clear_output:
                                 self.debug('Not clearing out output directory - we are on site: {0}'.format(parts[1]))
                 if do_clear_output is None:
@@ -748,7 +797,9 @@ class Common(object):
                             job_data[key] = self.get_compute()[key]
                     self.info(
                         'Checking if output directory {0} needs to be cleared out (setting: {1}, my site: {2}, job_data: {3})'.format(
-                            p_output, cod, site_code, job_data))
+                            p_output, cod, site_code, job_data
+                        )
+                    )
                     if not os.path.exists(p_output):
                         self.debug('Output does not exists!')
                     else:
@@ -770,8 +821,11 @@ class Common(object):
                                     self.info('Same job outputting to directory, not touching existing files!')
                                 else:
                                     do_move_files = True
-                                    self.warning('Another job ({0}) has output to this directory, clearing...'.format(
-                                        prev_job_data))
+                                    self.warning(
+                                        'Another job ({0}) has output to this directory, clearing...'.format(
+                                            prev_job_data
+                                        )
+                                    )
                         if do_move_files:
                             # Grab lock
                             lock_taken, p_clear_lock = self.take_lock(p_output, 'output clear')
@@ -779,16 +833,19 @@ class Common(object):
                                 try:
                                     # Find files
                                     files_to_move = []
-                                    p_destination_base = os.path.join(os.path.dirname(p_output), 'ZZZ-TEMP',
-                                                                      os.path.basename(p_output))
+                                    p_destination_base = os.path.join(
+                                        os.path.dirname(p_output), 'ZZZ-TEMP', os.path.basename(p_output)
+                                    )
                                     for filename in os.listdir(p_output):
                                         files_to_move.append(filename)
                                     if len(files_to_move) == 0:
                                         self.info('No output files to move away!')
                                     else:
                                         self.warning(
-                                            'Moving {0} files(s) to "{1}"'.format(len(files_to_move),
-                                                                                  p_destination_base))
+                                            'Moving {0} files(s) to "{1}"'.format(
+                                                len(files_to_move), p_destination_base
+                                            )
+                                        )
                                         for filename in files_to_move:
                                             p_source = os.path.join(p_output, filename)
                                             p_destination = os.path.join(p_destination_base, filename)
@@ -828,9 +885,7 @@ class Common(object):
                                                     shutil.rmtree(p_source)
                                                 if os.path.exists(p_source):
                                                     self.warning(
-                                                        '   Could not remove output file: {0}!'.format(
-                                                            p_source
-                                                        )
+                                                        '   Could not remove output file: {0}!'.format(p_source)
                                                     )
                                             else:
                                                 self.warning('   Cleared out old output: "{0}"!'.format(filename))
@@ -854,8 +909,9 @@ class Common(object):
 
     @staticmethod
     def recursive_kill_windows_pid(pid):
-        output = subprocess.check_output('wmic process where (ParentProcessId={0}) get ProcessId'.format(pid),
-                                         shell=True)
+        output = subprocess.check_output(
+            'wmic process where (ParentProcessId={0}) get ProcessId'.format(pid), shell=True
+        )
         if 0 < len(output or ''):
             for line in output.decode('utf-8').split("\n"):
                 try:
@@ -872,10 +928,10 @@ class Common(object):
         Common.warning('Terminating PID: {0}'.format(self.process.pid))
         if Common.is_win():
             Common.recursive_kill_windows_pid(self.process.pid)
-            #os.system('TASKKILL /f /PID {0}'.format(self.process.pid))
+            # os.system('TASKKILL /f /PID {0}'.format(self.process.pid))
         else:
             os.killpg(self.process.pid, signal.SIGKILL)
-            #os.system('kill -9 {0}'.format(self.process.pid))
+            # os.system('kill -9 {0}'.format(self.process.pid))
         # try:
         #   self.process.terminate()
         # except:
@@ -890,12 +946,11 @@ class Common(object):
             FIRST = int(self.item.split("-")[0])
             LAST = int(self.item.split("-")[-1])
             for item in range(FIRST, LAST):
-                Common.info('*'*100)
+                Common.info('*' * 100)
                 Common.info('Batch rendering frame {} of [{}-{}]'.format(item, FIRST, LAST))
-                self._execute(item, additional_envs={'ACCSYN_ITEM':str(item)})
+                self._execute(item, additional_envs={'ACCSYN_ITEM': str(item)})
         else:
             self._execute(self.item)
-
 
     def _execute(self, item, additional_envs=None):
         commands = self.get_commandline(item)
@@ -970,7 +1025,6 @@ class Common(object):
                     self.process = subprocess.Popen(
                         commands, True, env=new_envs, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
                     )
-            # exitcode = self.process.wait()
             while True:
                 if first_run:
                     Common.info('Process PID: {0}'.format(self.process.pid))
@@ -980,7 +1034,7 @@ class Common(object):
 
                 # Empty data waiting for us in pipes
                 stdout = self.process.stdout.readline()
-                print(stdout, end='')
+                print('!' + stdout, end='')
                 sys.stdout.flush()
 
                 process_result = self.process_output(stdout, '')

@@ -58,7 +58,7 @@ class App(Common):
         "default_range": "1001-1100",
         "default_bucketsize": 5,
         "filename_extensions": ".nk",
-        "binary_filename_extensions": ""
+        "binary_filename_extensions": "",
     }
 
     PARAMETERS = {"mapped_share_paths": [], "arguments": "-txV", "input_conversion": "auto"}
