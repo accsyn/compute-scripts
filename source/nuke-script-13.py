@@ -1,13 +1,12 @@
 ''' 
 
-    Nuke v13 accsyn compute app script.
+    Nuke Script v13 accsyn compute app script.
 
-    Finds and executes Nuke by building a commandline out of 'item'(frame number)
+    Finds and executes Nuke by building a commandline out of input (script path)
     and parameters provided.
 
     Changelog:
 
-        * v1r2; Fixed bug where p_executable_rel was not found.
         * v1r1; First version.
 
     This software is provided "as is" - the author and distributor can not be held 
@@ -41,7 +40,7 @@ except ImportError as e:
 
 class App(Common):
 
-    __revision__ = 2  # Will be automatically increased each publish
+    __revision__ = 1  # Will be automatically increased each publish
 
     # App configuration
     #
@@ -53,15 +52,9 @@ class App(Common):
 
     # -- APP CONFIG START --
 
-    SETTINGS = {
-        "items": True,
-        "default_range": "1001-1100",
-        "default_bucketsize": 5,
-        "filename_extensions": ".nk",
-        "binary_filename_extensions": "",
-    }
+    SETTINGS = {"items": False, "filename_extensions": ".py", "binary_filename_extensions": ""}
 
-    PARAMETERS = {"mapped_share_paths": [], "arguments": ["-txV"], "input_conversion": "auto"}
+    PARAMETERS = {"mapped_share_paths": [], "arguments": ["-tV"], "script_arguments": [], "input_conversion": "auto"}
 
     # -- APP CONFIG END --
 
@@ -182,24 +175,14 @@ class App(Common):
             parameters = self.get_compute()['parameters']
 
             if 0 < len(parameters.get('arguments') or ''):
-                arguments = parameters['arguments']
-                if 0 < len(arguments):
-                    if isinstance(arguments, list):
-                        args.extend(arguments)
-                    else:
-                        args.extend(arguments.split(' '))  # BWCOMP
-
-        if self.item and self.item != 'all':
-            # Add range
-            start = end = self.item
-            if -1 < self.item.find('-'):
-                parts = self.item.split('-')
-                start = parts[0]
-                end = parts[1]
-            args.extend(['-F', '%s-%s' % (start, end)])
+                args.extend(parameters['arguments'])
 
         input_path = self.normalize_path(self.data['compute']['input'])
         args.extend([input_path])
+
+        if 0 < len(parameters.get('script_arguments') or ''):
+            args.extend(parameters['script_arguments'])
+
         # Find out preffered nuke version from script, expect:
         #   #! C:/Program Files/Nuke10.0v6/nuke-10.0.6.dll -nx
         #   version 10.0 v6
@@ -227,33 +210,6 @@ class App(Common):
             return retval
 
         raise Exception('This OS is not recognized by this accsyn app!')
-
-    def process_output(self, stdout, stderr):
-        '''
-        Sift through stdout/stderr and take action, return exitcode instead of None if should
-         abort
-        '''
-        sys.stdout.flush()
-
-        def check_stuck_render():
-            while self.executing:
-                time.sleep(1.0)
-                if (
-                    self.executing
-                    and not self.date_finish_expire is None
-                    and self.date_finish_expire < datetime.datetime.now()
-                ):
-                    Common.warning('Nuke finished but still running (hung?), finishing up.')
-                    self.exitcode_force = 0
-                    self.kill()
-                    break  # We are done
-
-        ''' Nuke might stuck on finished render, handle this. '''
-        if -1 < (stdout + stderr).find('Total render time:'):
-            Common.info('Finished Nuke render will expire in 5s...')
-            self.date_finish_expire = datetime.datetime.now() + datetime.timedelta(seconds=5)
-            thread = threading.Thread(target=check_stuck_render)
-            thread.start()
 
 
 if __name__ == '__main__':
