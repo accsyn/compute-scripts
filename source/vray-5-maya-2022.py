@@ -7,7 +7,9 @@
 
     Changelog:
 
-        v1r1; Initial version
+        * v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
+        * v1r2; (Henrik, 22.09-14) Fixed output bug
+        * v1r1; Initial version
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -163,9 +165,9 @@ class App(Common):
                 start = parts[0]
                 end = parts[1]
             args.extend(["-s", str(start), "-e", str(end)])
-        if "output" in self.get_compute()["compute"]:
+        if "output" in self.get_compute():
             # Output has already been converted to local platform
-            args.extend(["-rd", self.get_compute()["compute"]["output"]])
+            args.extend(["-rd", self.get_compute()["output"]])
         # Input has already been converted to local platform
         p_input = self.normalize_path(self.get_compute()["input"])
         args.extend([p_input])

@@ -7,6 +7,8 @@
 
 	Changelog:
 
+        v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
+		v1r3; More relaxed executable locator, accepts latest <major>.<minor> version.
 		v1r2; Wrong call to debug.
 		v1r1; Compliance to accsyn v1.4.
 
@@ -17,7 +19,9 @@
 
 '''
 
-import os, sys, logging, traceback
+import os
+import sys
+import traceback
 
 try:
     if 'ACCSYN_COMPUTE_COMMON_PATH' in os.environ:
@@ -29,7 +33,7 @@ except ImportError as e:
 
 
 class App(Common):
-    __revision__ = 3  # Increment this after each update
+    __revision__ = 4  # Increment this after each update
 
     # App configuration
     # IMPORTANT NOTE: This section defines app behaviour and should not be refactored or moved away from the enclosing START/END markers. Read into memory by cloud at start and publish.
@@ -41,7 +45,7 @@ class App(Common):
         "default_range": "1001-1100",
         "default_bucketsize": 1,
         "max_bucketsize": 1,
-        "filename_extensions": ".ifd",
+        "filename_extensions": ".ifd"
     }
 
     PARAMETERS = {"arguments": "-V 2p"}
@@ -94,21 +98,44 @@ class App(Common):
 
     def get_executable(self):
         '''(REQUIRED) Return path to executable as string'''
-        if not Common._dev:
+
+        def find_houdini(p_base, prefix, version, preferred_version=None):
+            if os.path.exists(p_base):
+                candidates = []
+                for fn in os.listdir(p_base):
+                    if fn.startswith(prefix) and -1<fn.find(version+'.'):
+                        candidates.append(fn)
+                if 0 < len(candidates):
+                    dirname = None
+                    if preferred_version:
+                        for candidate in candidates:
+                            if -1<candidate.find(preferred_version):
+                                dirname = candidate
+                                break
+                        if dirname is None:
+                            Common.warning('Could not find preferred Houdini version: {}, falling back on latest.'.format(preferred_version))
+                    if dirname is None:
+                        dirname = sorted(candidates)[-1] # Pick highest version
+                    return os.path.join(p_base, dirname)
+                else:
+                    raise Exception('No {0} application version found on system!'.format(prefix))
+            else:
+                raise Exception('Application base directory "{0}" not found on system!'.format(p_base))
+
+        if Common._dev:
             if Common.is_lin():
-                # return "/opt/hfs18.0.597/bin/mantra"
-                return "/library/software/networkinstall/linux/houdini/hfs18.5.563/bin/mantra"
+                Common.warning("Houdini dev app not supported on Linux yet!")
             elif Common.is_mac():
-                return "/Applications/Houdini/Houdini18.5.563//Frameworks/Houdini.framework/Versions/18.5/Resources/bin/mantra"
+                Common.warning("Houdini dev app not supported on Mac yet!")
             elif Common.is_win():
-                return "C:\\Program Files\\Side Effects Software\\Houdini 18.5.563\\bin\\mantra.exe"
-        else:
-            if Common.is_lin():
-                raise Exception("Houdini dev app not supported on Linux yet!")
-            elif Common.is_mac():
-                return Exception("Houdini dev app not supported on Mac yet!")
-            elif Common.is_win():
-                return Exception("Houdini dev app not supported on Windows yet!")
+                Common.warning("Houdini dev app not supported on Windows yet!")
+
+        if Common.is_lin():
+            return os.path.join(find_houdini('/opt', 'hfs', '18.5'), "bin", "mantra")
+        elif Common.is_mac():
+            return os.path.join(find_houdini('/Applications/Houdini', 'Houdini', '18.5'), "Frameworks", "Houdini.framework", "Versions", "18.5", "Resources", "bin", "mantra")
+        elif Common.is_win():
+            return os.path.join(find_houdini('"C:\\Program Files\\Side Effects Software', 'Houdini ', '18.5'), "bin", "mantra.exe")
 
     def get_envs(self):
         '''Get site specific envs'''
@@ -125,7 +152,7 @@ class App(Common):
         if 'parameters' in self.get_compute():
             parameters = self.get_compute()['parameters']
             if 'arguments' in parameters:
-                args.extend([parameters['arguments']])
+                args.extend(Common.build_arguments(parameters['arguments']))
         if 'output' in self.data['compute']:
             path_output = self.normalize_path(
                 self.data['compute']['output'], mkdirs=True

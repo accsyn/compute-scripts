@@ -5,6 +5,10 @@
 
     Changelog:
 
+        * v1r29; (Henrik Norin, 22.11.11) Comply with accsyn v2.2 task progress.
+        * v1r28; (Henrik Norin, 22.10.25) Only print exception on failed path conversion.
+        * v1r27; (Henrik Norin, 22.08.31) Prevented infinite loop on input conversion if to path is same as from path.
+        * v1r26; (Henrik Norin, 22.07.12) Change directory to home.
         * v1r25; (Henrik Norin, 22.05.12) Separate render app output (public) from accsyn script output (non restricted user accessible)
         * v1r24; (Henrik Norin, 22.05.09) (Localization) An additional convert_path call if a line contains
             path delimiters, mostly for fully converting Nuke scripts.
@@ -17,7 +21,6 @@
         * v1r15; (Henrik Norin) Python 3 compliance. OS dependent path conversions.
         * v1r13; (Henrik Norin) Process creation flags support.
         * v1r12; (Henrik Norin) Compliance to accsyn v1.4.
-
         
     This software is provided "as is" - the author and distributor can not be 
     held  responsible for any damage caused by executing this script in any 
@@ -48,7 +51,7 @@ logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, d
 
 class Common(object):
 
-    __revision__ = 25  # Will be automatically increased each publish.
+    __revision__ = 28  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -124,6 +127,7 @@ class Common(object):
         else:
             Common.info("Accsyn PID({0})".format(os.getpid()))
         self.check_mounts()
+        self._current_task = None
 
     @staticmethod
     def get_path_version_name():
@@ -405,9 +409,12 @@ class Common(object):
         line_no = 1
         for line in f_src:
             try:
+                had_conversion = False
+                line_orig = str(line)
                 for (path_from, path_to) in conversions:
+                    if path_from == path_to:
+                        continue
                     while True:
-                        line_orig = str(line)
                         idx = line.lower().find(path_from.lower())
                         if idx == -1:
                             if -1 < path_from.find('\\') and -1 < line.find('/'):
@@ -422,6 +429,8 @@ class Common(object):
                             self.convert_path(path_to),
                             (line[idx + len(path_from) :] if idx + len(path_from) < len(line) else ""),
                         )
+                        had_conversion = True
+                if had_conversion:
                     if -1 < line.find('/') or -1 < line.find('\\'):
                         line = self.convert_path(line)
                     if line != line_orig:
@@ -718,9 +727,13 @@ class Common(object):
                                                 for d in self.get_compute()['parameters']['mapped_share_paths']:
                                                     if len(d['remote'] or '') > 0 and len(d['local'] or '') > 0:
                                                         if not 'os' in d or d['os'] == self.get_remote_os().lower():
-                                                            conversions.append(
-                                                                (d['remote'], self.normalize_path(d['local']))
-                                                            )
+                                                            try:
+                                                                conversions.append(
+                                                                    (d['remote'], self.normalize_path(d['local']))
+                                                                )
+                                                            except:
+                                                                # Not critical
+                                                                Common.warning(traceback.format_exc())
                                             Common.info(
                                                 "Lock aquired, parsing input file (conversions: %s)..." % (conversions)
                                             )
@@ -908,6 +921,27 @@ class Common(object):
         return self.get_envs()
 
     @staticmethod
+    def build_arguments(arguments):
+        '''
+        Support url encoded quotes, for example:
+
+        -r arnold -rl %22layer1 layer2%22 -v
+
+        '''
+        result = []
+        arguments = arguments or ''
+        if -1 < arguments.find('%22'):
+            # Preprocess
+            within_escaped = False
+            for index, part in enumerate(arguments.split('%22')):
+                if (index % 2) == 0:
+                    result.extend([s for s in part.split(' ') if 0 < len(s.strip())])  # Normal arg
+                else:
+                    result.append(part) # An arg with whitespaces
+        return result
+
+
+    @staticmethod
     def recursive_kill_windows_pid(pid):
         output = subprocess.check_output(
             'wmic process where (ParentProcessId={0}) get ProcessId'.format(pid), shell=True
@@ -932,10 +966,36 @@ class Common(object):
         else:
             os.killpg(self.process.pid, signal.SIGKILL)
             # os.system('kill -9 {0}'.format(self.process.pid))
-        # try:
-        #   self.process.terminate()
-        # except:
-        #   Common.warning(traceback.format_exc())
+
+    def task_started(self, uri):
+        '''A task has been started within a bucket'''
+        self.info('Task started: {}'.format(uri))
+        if not self._current_task is None and self._current_task != uri:
+            # Current task is done
+            print("""{"taskstatus":true,"uri":"%s","status":"done"}"""%(self._current_task))
+        self._current_task = uri
+
+    @staticmethod
+    def parse_number(fragment):
+        ''' Try to get last number from a string fragment, for example:
+
+        /pat_sc045_2165_lighting_v0003_Canyon.1009.exr'
+        '''
+        result = -1
+        number = None
+        try:
+            for c in reversed(fragment or ''):
+                if c in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']:
+                    if number is None:
+                        number = ''
+                    number = '{}{}'.format(c, number)
+                elif number is not None:
+                    # Wrap
+                    result = int(number)
+                    break
+        except:
+            print(traceback.format_exc())
+        return result
 
     def execute(self):
         '''Compute'''
@@ -946,6 +1006,8 @@ class Common(object):
             FIRST = int(self.item.split("-")[0])
             LAST = int(self.item.split("-")[-1])
             for item in range(FIRST, LAST):
+                # Tell accsyn previous task is done
+                self.task_started(str(item))
                 Common.info('*' * 100)
                 Common.info('Batch rendering frame {} of [{}-{}]'.format(item, FIRST, LAST))
                 self._execute(item, additional_envs={'ACCSYN_ITEM': str(item)})
@@ -966,22 +1028,23 @@ class Common(object):
             new_envs = None
             if app_envs or additional_envs:
                 new_envs = {}
-                for k, v in os.environ.iteritems():
+                for k, v in os.environ.items():
                     new_envs[str(Common.safely_printable(k))] = str(Common.safely_printable(v))
                 if app_envs:
-                    for k, v in app_envs.iteritems():
+                    for k, v in app_envs.items():
                         new_envs[str(Common.safely_printable(k))] = str(Common.safely_printable(v))
                 if additional_envs:
-                    for k, v in additional_envs.iteritems():
+                    for k, v in additional_envs.items():
                         new_envs[str(Common.safely_printable(k))] = str(Common.safely_printable(v))
             for idx in range(0, len(commands)):
-                if not isinstance(commands[idx], str):
-                    if sys.version_info[0] < 3 and isinstance(commands[idx], unicode):
-                        commands[idx] = commands[idx].encode(u'utf-8')
+                if not isinstance(commands[idx], str) and sys.version_info[0] < 3 and isinstance(commands[idx], unicode):
+                    commands[idx] = commands[idx].encode(u'utf-8')
             stdin = self.get_stdin(item)
             if new_envs:
                 Common.info("Environment variables: '{0}'".format(new_envs))
             creationflags = self.get_creation_flags(item)
+            Common.info("Changing directory to home...")
+            os.chdir(os.path.expanduser("~"))
             Common.info("Running '{0}'".format(str([Common.safely_printable(s) for s in commands])))
             if stdin:
                 Common.info("Stdin: '{0}".format(stdin))
@@ -994,7 +1057,7 @@ class Common(object):
                 if not creationflags is None:
                     self.process = subprocess.Popen(
                         commands,
-                        shell,
+                        shell=True,
                         stdin=subprocess.PIPE,
                         env=new_envs,
                         creationflags=creationflags,
@@ -1004,7 +1067,7 @@ class Common(object):
                 else:
                     self.process = subprocess.Popen(
                         commands,
-                        shell,
+                        shell=True,
                         stdin=subprocess.PIPE,
                         env=new_envs,
                         stdout=subprocess.PIPE,
@@ -1015,7 +1078,7 @@ class Common(object):
                 if not creationflags is None:
                     self.process = subprocess.Popen(
                         commands,
-                        True,
+                        shell=True,
                         env=new_envs,
                         creationflags=creationflags,
                         stdout=subprocess.PIPE,
@@ -1034,12 +1097,14 @@ class Common(object):
 
                 # Empty data waiting for us in pipes
                 stdout = self.process.stdout.readline()
+                if not isinstance(stdout, str):
+                    stdout = stdout.decode('ascii')
                 print('!' + stdout, end='')
                 sys.stdout.flush()
 
                 process_result = self.process_output(stdout, '')
                 if not process_result is None:
-                    Common.warning('Premptive terminating process (pid: {0}).'.format(self.process.pid))
+                    Common.warning('Pre-emptive terminating process (pid: {0}).'.format(self.process.pid))
                     exitcode = process_result
                     break
                 elif stdout == '' and self.process.poll() is not None:
@@ -1048,12 +1113,6 @@ class Common(object):
             self.process.communicate()  # Dummy call, needed?
             if exitcode is None:
                 exitcode = self.process.returncode
-
-            # exitcode = process.poll()
-            # if exitcode is None:
-            #   time.sleep(0.2) # Still running, breathe
-            # else:
-            #   break
 
         finally:
             try:

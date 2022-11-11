@@ -7,6 +7,7 @@
 
     Changelog:
 
+        * v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
         * v1r1; First version.
 
     This software is provided "as is" - the author and distributor can not be held 
@@ -40,7 +41,7 @@ except ImportError as e:
 
 class App(Common):
 
-    __revision__ = 1  # Will be automatically increased each publish
+    __revision__ = 2  # Will be automatically increased each publish
 
     # App configuration
     #
@@ -175,7 +176,7 @@ class App(Common):
             parameters = self.get_compute()['parameters']
 
             if 0 < len(parameters.get('arguments') or ''):
-                args.extend(parameters['arguments'])
+                args.extend(Common.build_arguments(arguments))
 
         input_path = self.normalize_path(self.data['compute']['input'])
         args.extend([input_path])

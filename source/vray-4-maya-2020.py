@@ -7,8 +7,9 @@
 
     Changelog:
 
-        v1r8; Python 3 compliance. Code style.
-        v1r3; Compliance to accsyn v1.4.
+        * v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
+        * v1r8; Python 3 compliance. Code style.
+        * v1r3; Compliance to accsyn v1.4.
 
     This software is provided "as is" - the author and distributor can not be held 
     responsible for any damage caused by executing this script in any means.
@@ -151,7 +152,7 @@ class App(Common):
             if 0 < len(parameters.get("arguments") or ""):
                 arguments = parameters["arguments"]
                 if 0 < len(arguments):
-                    args.extend(arguments.split(" "))
+                    args.extend(Common.build_arguments(arguments))
             if "project" in parameters and 0 < len(parameters["project"]):
                 args.extend(["-proj", self.normalize_path(parameters["project"])])
             if "renderlayer" in parameters:

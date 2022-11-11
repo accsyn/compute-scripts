@@ -7,8 +7,10 @@
 
     Changelog:
 
-        * v1r2; Fixed bug where p_executable_rel was not found.
-        * v1r1; First version.
+        * v1r4; (Henrik Norin, 22.11.11) Report progress frame number/uri within a bucket. Url encoded arguments support.
+        * v1r3; (Henrik Norin, 22.06.27) Make sure not all lines in files have slash conversions.
+        * v1r2; (Henrik Norin) Fixed bug where p_executable_rel was not found.
+        * v1r1; (Henrik Norin) First version.
 
     This software is provided "as is" - the author and distributor can not be held 
     responsible for any damage caused by executing this script in any means.
@@ -41,7 +43,7 @@ except ImportError as e:
 
 class App(Common):
 
-    __revision__ = 2  # Will be automatically increased each publish
+    __revision__ = 4  # Will be automatically increased each publish
 
     # App configuration
     #
@@ -58,7 +60,7 @@ class App(Common):
         "default_range": "1001-1100",
         "default_bucketsize": 5,
         "filename_extensions": ".nk",
-        "binary_filename_extensions": "",
+        "binary_filename_extensions": ""
     }
 
     PARAMETERS = {"mapped_share_paths": [], "arguments": ["-txV"], "input_conversion": "auto"}
@@ -184,11 +186,7 @@ class App(Common):
             if 0 < len(parameters.get('arguments') or ''):
                 arguments = parameters['arguments']
                 if 0 < len(arguments):
-                    if isinstance(arguments, list):
-                        args.extend(arguments)
-                    else:
-                        args.extend(arguments.split(' '))  # BWCOMP
-
+                    args.extend(Common.build_arguments(arguments))
         if self.item and self.item != 'all':
             # Add range
             start = end = self.item
@@ -231,9 +229,30 @@ class App(Common):
     def process_output(self, stdout, stderr):
         '''
         Sift through stdout/stderr and take action, return exitcode instead of None if should
-         abort
+         abort.
+
+        Nuke example output:
+
+        P:\_PIPELINE4\tools\nuke\filmgategizmos\Util/MaskCrop.gizmo![16:26.40] Warning: Could not find value "linear" for "colorspace". It will be appended to the menu list.![16:26.40] Warning: Could not find value "linear" for "in_colorspace". It will be appended to the menu list.![16:26.40] Warning: Could not find value "linear" for "out_colorspace". It will be appended to the menu list.
+        Loading C:/Program Files/Nuke13.1v2/plugins/Text.dll!Loading C:/Program Files/Nuke13.1v2/plugins/jpegWriter.dll
+        Loading C:/Program Files/Nuke13.1v2/plugins/movWriter.dll![16:26:40 W. Europe Standard Time]
+        Read nuke script: J://ZZZ-DATA/farm/tempsaves/pat/sc045/2830/compositing/nk/pat_sc045_2830_compositing_v0002_cp_20221111_162546.nk
+
+        Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01010.exr took 3.16 seconds
+
+        Frame 1010 (2 of 5)!!!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01011.exr .1.3.6.8!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01011.exr took 3.31 seconds!Frame 1011 (3 of 5)!!.9!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01012.exr .1.2.5.7.9!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01012.exr took 3.32 seconds!Frame 1012 (4 of 5)!!!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01013.exr .2.4.7.9!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01013.exr took 3.55 seconds!Frame 1013 (5 of 5)!!Total render time: 21 seconds!(2022-11-11 16:27:04)
+
         '''
         sys.stdout.flush()
+
+        if -1<stdout.find('Writing') and -1<stdout.find('took'):
+            idx = stdout.rfind('/')
+            if idx == -1:
+                stdout.rfind('\\')
+            if 1<idx:
+                frame_number = Common.parse_number(stdout[idx:stdout.rfind('took')])
+                if frame_number is not None:
+                    Common.task_started(frame_number)
 
         def check_stuck_render():
             while self.executing:

@@ -7,6 +7,7 @@
 
     Changelog:
 
+        * v1r5; (Henrik Norin, 22.11.11) Report progress frame number/uri within a bucket. Url encoded arguments support.
         * v1r4; Python 3 compliance. Convert windows paths to Nuke (/) during input file conversion.
         * v1r3; Code style
         * v1r2; Parse Nuke output and finish render if hangs 5s on "Total render time:"
@@ -186,7 +187,7 @@ class App(Common):
             if 0 < len(parameters.get('arguments') or ''):
                 arguments = parameters['arguments']
                 if 0 < len(arguments):
-                    args.extend(arguments.split(' '))
+                    args.extend(Common.build_arguments(arguments))
 
             # Grab a workstation license?
             hostname = socket.gethostname().lower()
@@ -237,6 +238,17 @@ class App(Common):
          abort
         '''
         sys.stdout.flush()
+
+        sys.stdout.flush()
+
+        if -1<stdout.find('Writing') and -1<stdout.find('took'):
+            idx = stdout.rfind('/')
+            if idx == -1:
+                stdout.rfind('\\')
+            if 1<idx:
+                frame_number = Common.parse_number(stdout[idx:stdout.rfind('took')])
+                if frame_number is not None:
+                    self.task_started(frame_number)
 
         def check_stuck_render():
             while self.executing:

@@ -7,7 +7,8 @@
 
     Changelog:
 
-        v1r1; Initial version
+        v1r2; (Henrik, 22.11.11) Url encoded arguments support.
+        v1r1; Initial version.
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -169,9 +170,7 @@ class App(Common):
         if "parameters" in self.get_compute():
             parameters = self.get_compute()["parameters"]
             if 0 < len(parameters.get("arguments") or ""):
-                arguments = parameters["arguments"]
-                if 0 < len(arguments):
-                    args.extend(arguments.split(" "))
+                args.extend(Common.build_arguments(parameters['arguments']))
         if Common.is_lin():
             retval = [path_executable]
             retval.extend(args)
