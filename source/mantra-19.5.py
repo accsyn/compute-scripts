@@ -7,6 +7,7 @@
 
 	Changelog:
 
+        v1r3; (Henrik Norin, 23.01.18) Fixed path bug.
         v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
 		v1r1; Initial version
 
@@ -131,7 +132,7 @@ class App(Common):
         elif Common.is_mac():
             return os.path.join(find_houdini('/Applications/Houdini', 'Houdini', '19.5'), "Frameworks", "Houdini.framework", "Versions", "19.5", "Resources", "bin", "mantra")
         elif Common.is_win():
-            return os.path.join(find_houdini('"C:\\Program Files\\Side Effects Software', 'Houdini ', '19.5'), "bin", "mantra.exe")
+            return os.path.join(find_houdini('C:\\Program Files\\Side Effects Software', 'Houdini ', '19.5'), "bin", "mantra.exe")
 
 
 

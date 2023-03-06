@@ -5,6 +5,7 @@
 
     Changelog:
 
+		* v1r30; (Henrik Norin, 23.01.17) Support for escaping arguments with whitespaces using "%22spaced value%22" syntax .
         * v1r29; (Henrik Norin, 22.11.11) Comply with accsyn v2.2 task progress.
         * v1r28; (Henrik Norin, 22.10.25) Only print exception on failed path conversion.
         * v1r27; (Henrik Norin, 22.08.31) Prevented infinite loop on input conversion if to path is same as from path.
@@ -51,7 +52,7 @@ logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, d
 
 class Common(object):
 
-    __revision__ = 28  # Will be automatically increased each publish.
+    __revision__ = 30  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -186,15 +187,25 @@ class Common(object):
 
     @staticmethod
     def safely_printable(s):
+        if s is None:
+            return None
         if 2 < sys.version_info[0]:
-            return str(s)
+            if isinstance(s, bytes):
+                try:
+                    return s.decode('utf-8')
+                except:
+                    return s.decode('utf-16')
+            elif not isinstance(s, str):
+                s = str(s)
+                if isinstance(s, bytes):
+                    return s.decode('utf-8')
+                else:
+                    return s
+            else:
+                return s
         else:
-            try:
-                return unicodedata.normalize("NFKD", unicode(s) if not isinstance(s, unicode) else s).encode(
-                    "ascii", errors="ignore"
-                )
-            except:
-                return unicodedata.normalize("NFKD", unicode(s) if not isinstance(s, unicode) else s).encode("ascii")
+            return unicodedata.normalize("NFKD", unicode(s) if not isinstance(s, unicode) else s).encode("ascii",
+                                                                                                         errors="ignore")
 
     @staticmethod
     def info(s):
@@ -928,16 +939,17 @@ class Common(object):
         -r arnold -rl %22layer1 layer2%22 -v
 
         '''
-        result = []
         arguments = arguments or ''
         if -1 < arguments.find('%22'):
+            result = []
             # Preprocess
-            within_escaped = False
             for index, part in enumerate(arguments.split('%22')):
                 if (index % 2) == 0:
                     result.extend([s for s in part.split(' ') if 0 < len(s.strip())])  # Normal arg
                 else:
                     result.append(part) # An arg with whitespaces
+        else:
+            result = arguments.split(' ')
         return result
 
 
@@ -1005,7 +1017,7 @@ class Common(object):
             # Render a batch of items, one by one
             FIRST = int(self.item.split("-")[0])
             LAST = int(self.item.split("-")[-1])
-            for item in range(FIRST, LAST):
+            for item in range(FIRST, LAST+1):
                 # Tell accsyn previous task is done
                 self.task_started(str(item))
                 Common.info('*' * 100)
@@ -1095,11 +1107,9 @@ class Common(object):
                         self.process.stdin.write(stdin)
                     first_run = False
 
-                # Empty data waiting for us in pipes
-                stdout = self.process.stdout.readline()
-                if not isinstance(stdout, str):
-                    stdout = stdout.decode('ascii')
-                print('!' + stdout, end='')
+                # Read data waiting for us in pipes
+                stdout = Common.safely_printable(self.process.stdout.readline())
+                print('!{}'.format(stdout), end='')
                 sys.stdout.flush()
 
                 process_result = self.process_output(stdout, '')
@@ -1110,7 +1120,7 @@ class Common(object):
                 elif stdout == '' and self.process.poll() is not None:
                     break
 
-            self.process.communicate()  # Dummy call, needed?
+            self.process.communicate()
             if exitcode is None:
                 exitcode = self.process.returncode
 

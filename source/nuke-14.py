@@ -1,18 +1,15 @@
-''' 
+'''
 
-    Nuke v13 accsyn compute app script.
+    Nuke v14 accsyn compute app script.
 
     Finds and executes Nuke by building a commandline out of 'item'(frame number)
     and parameters provided.
 
     Changelog:
 
-        * v1r4; (Henrik Norin, 22.11.11) Report progress frame number/uri within a bucket. Url encoded arguments support.
-        * v1r3; (Henrik Norin, 22.06.27) Make sure not all lines in files have slash conversions.
-        * v1r2; (Henrik Norin) Fixed bug where p_executable_rel was not found.
-        * v1r1; (Henrik Norin) First version.
+        * v1r1; (Henrik Norin, 23.01.17) Initial version cloned from Nuke 13 script.
 
-    This software is provided "as is" - the author and distributor can not be held 
+    This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
 
     Author: Henrik Norin, accsyn / HDR AB
@@ -43,7 +40,7 @@ except ImportError as e:
 
 class App(Common):
 
-    __revision__ = 4  # Will be automatically increased each publish
+    __revision__ = 1  # Will be automatically increased each publish
 
     # App configuration
     #
@@ -67,7 +64,7 @@ class App(Common):
 
     # -- APP CONFIG END --
 
-    NUKE_VERSION = '13'
+    NUKE_VERSION = '14'
 
     def __init__(self, argv):
         super(App, self).__init__(argv)
@@ -230,17 +227,6 @@ class App(Common):
         '''
         Sift through stdout/stderr and take action, return exitcode instead of None if should
          abort.
-
-        Nuke example output:
-
-        Loading C:/Program Files/Nuke13.1v2/plugins/Text.dll!Loading C:/Program Files/Nuke13.1v2/plugins/jpegWriter.dll
-        Loading C:/Program Files/Nuke13.1v2/plugins/movWriter.dll![16:26:40 W. Europe Standard Time]
-        Read nuke script: J://ZZZ-DATA/farm/tempsaves/pat/sc045/2830/compositing/nk/pat_sc045_2830_compositing_v0002_cp_20221111_162546.nk
-
-        Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01010.exr took 3.16 seconds
-
-        Frame 1010 (2 of 5)!!!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01011.exr .1.3.6.8!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01011.exr took 3.31 seconds!Frame 1011 (3 of 5)!!.9!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01012.exr .1.2.5.7.9!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01012.exr took 3.32 seconds!Frame 1012 (4 of 5)!!!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01013.exr .2.4.7.9!Writing J:/pat/sc045/2830/compositing/render/pat_sc045_2830_compositing_v0001/sequence/pat_sc045_2830_compositing_v0001.01013.exr took 3.55 seconds!Frame 1013 (5 of 5)!!Total render time: 21 seconds!(2022-11-11 16:27:04)
-
         '''
         sys.stdout.flush()
 
