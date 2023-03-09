@@ -237,7 +237,7 @@ class App(Common):
             if 1<idx:
                 frame_number = Common.parse_number(stdout[idx:stdout.rfind('took')])
                 if frame_number is not None:
-                    Common.task_started(frame_number)
+                    self.task_started(frame_number)
 
         def check_stuck_render():
             while self.executing:
