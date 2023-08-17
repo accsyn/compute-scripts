@@ -39,7 +39,6 @@ except ImportError as e:
 
 
 class App(Common):
-
     __revision__ = 2  # Increment this after each update
 
     # App configuration
@@ -156,7 +155,6 @@ class App(Common):
     def get_creation_flags(self, item):
         '''Always run on low priority on windows'''
         if Common.is_win():
-
             ABOVE_NORMAL_PRIORITY_CLASS = 0x00008000
             BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
             HIGH_PRIORITY_CLASS = 0x00000080
@@ -165,47 +163,48 @@ class App(Common):
             REALTIME_PRIORITY_CLASS = 0x00000100
 
             return NORMAL_PRIORITY_CLASS
-    
+
     def process_output(self, stdout, stderr):
         '''(Override)
-        
-        Arnold example progress output:
-        
-00:15:54 41777MB         |     0% done - 16 rays/pixel
-00:16:18 47607MB         |     5% done - 11 rays/pixel
-00:17:12 49116MB         |    10% done - 5044 rays/pixel
-00:17:24 49136MB         |    15% done - 1336 rays/pixel
-00:17:24 49137MB         |    20% done - 80 rays/pixel
-00:17:48 49152MB         |    25% done - 2625 rays/pixel
-00:17:54 49158MB WARNING |   found NaN/inf in aiNormalMap283.out.VECTOR when shading object /Dogwood_Sapling_PAT_B/Dogwood_Sapling_PAT_BShape
-00:18:06 49165MB         |    30% done - 2081 rays/pixel
-00:18:20 49171MB         |    35% done - 1537 rays/pixel
-00:18:52 49184MB         |    40% done - 3434 rays/pixel
-00:19:25 49194MB         |    45% done - 3025 rays/pixel
-00:19:36 49197MB         |    50% done - 1198 rays/pixel
-00:19:45 49202MB         |    55% done - 932 rays/pixel
-00:20:07 49216MB         |    60% done - 2170 rays/pixel
-00:20:16 49220MB         |    65% done - 997 rays/pixel
-00:20:31 49228MB         |    70% done - 1574 rays/pixel
-00:20:46 49235MB         |    75% done - 1702 rays/pixel
-00:21:05 49244MB         |    80% done - 2118 rays/pixel
-00:21:20 49250MB         |    85% done - 1732 rays/pixel
-00:21:33 49255MB         |    90% done - 1400 rays/pixel
-00:21:49 49260MB         |    95% done - 2207 rays/pixel
-00:21:54 49262MB         |   100% done - 812 rays/pixel
-00:21:54 49262MB         |  render done in 6:59.988
-00:21:54 49262MB         |  [driver_exr] writing file `J:/pat/sc045/2165/lighting/render/pat_sc045_2165_lighting_v0001/pat_sc045_2165_lighting_v0003/pat_sc045_2165_lighting_v0003/Canyon/pat_sc045_2165_lighting_v0003_Canyon.1009.exr'
+
+                Arnold example progress output:
+
+        00:15:54 41777MB         |     0% done - 16 rays/pixel
+        00:16:18 47607MB         |     5% done - 11 rays/pixel
+        00:17:12 49116MB         |    10% done - 5044 rays/pixel
+        00:17:24 49136MB         |    15% done - 1336 rays/pixel
+        00:17:24 49137MB         |    20% done - 80 rays/pixel
+        00:17:48 49152MB         |    25% done - 2625 rays/pixel
+        00:17:54 49158MB WARNING |   found NaN/inf in aiNormalMap283.out.VECTOR when shading object /Dogwood_Sapling_PAT_B/Dogwood_Sapling_PAT_BShape
+        00:18:06 49165MB         |    30% done - 2081 rays/pixel
+        00:18:20 49171MB         |    35% done - 1537 rays/pixel
+        00:18:52 49184MB         |    40% done - 3434 rays/pixel
+        00:19:25 49194MB         |    45% done - 3025 rays/pixel
+        00:19:36 49197MB         |    50% done - 1198 rays/pixel
+        00:19:45 49202MB         |    55% done - 932 rays/pixel
+        00:20:07 49216MB         |    60% done - 2170 rays/pixel
+        00:20:16 49220MB         |    65% done - 997 rays/pixel
+        00:20:31 49228MB         |    70% done - 1574 rays/pixel
+        00:20:46 49235MB         |    75% done - 1702 rays/pixel
+        00:21:05 49244MB         |    80% done - 2118 rays/pixel
+        00:21:20 49250MB         |    85% done - 1732 rays/pixel
+        00:21:33 49255MB         |    90% done - 1400 rays/pixel
+        00:21:49 49260MB         |    95% done - 2207 rays/pixel
+        00:21:54 49262MB         |   100% done - 812 rays/pixel
+        00:21:54 49262MB         |  render done in 6:59.988
+        00:21:54 49262MB         |  [driver_exr] writing file `J:/pat/sc045/2165/lighting/render/pat_sc045_2165_lighting_v0001/pat_sc045_2165_lighting_v0003/pat_sc045_2165_lighting_v0003/Canyon/pat_sc045_2165_lighting_v0003_Canyon.1009.exr'
 
         '''
-        if -1<stdout.find('[driver_') and -1<stdout.find('writing file'):
+        if -1 < stdout.find('[driver_') and -1 < stdout.find('writing file'):
             # Find out which frame number
             idx = stdout.rfind('/')
             if idx == -1:
                 stdout.rfind('\\')
-            if 1<idx:
+            if 1 < idx:
                 frame_number = Common.parse_number(stdout[idx:])
                 if frame_number is not None:
                     Common.task_started(frame_number)
+
 
 if __name__ == "__main__":
     if "--help" in sys.argv:

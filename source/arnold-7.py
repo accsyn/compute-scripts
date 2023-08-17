@@ -24,7 +24,7 @@ try:
         sys.path.append(os.environ['ACCSYN_COMPUTE_COMMON_PATH'])
     from common import Common
 except ImportError as e:
-    print >>sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
+    print >> sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
     raise
 
 
@@ -42,7 +42,7 @@ class App(Common):
         "default_bucketsize": 1,
         "max_bucketsize": 1,
         "filename_extensions": ".ass",
-        "output_readonly": True
+        "output_readonly": True,
     }
 
     PARAMETERS = {"arguments": "-dw -nstdin -v 2"}
@@ -134,7 +134,7 @@ class App(Common):
                 args.extend(Common.build_arguments(parameters['arguments']))
 
         if Common.is_win() or True:
-            #retval = ["CMD", "/C", self.get_executable()]
+            # retval = ["CMD", "/C", self.get_executable()]
             retval = [self.get_executable()]
         else:
             retval = ["/bin/bash", "-c", self.get_executable()]

@@ -24,7 +24,7 @@ try:
         sys.path.append(os.environ['ACCSYN_COMPUTE_COMMON_PATH'])
     from common import Common
 except ImportError as e:
-    print >>sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
+    print >> sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
     raise
 
 
@@ -41,7 +41,7 @@ class App(Common):
         "default_range": "1001-1100",
         "default_bucketsize": 1,
         "max_bucketsize": 1,
-        "filename_extensions": ".ifd"
+        "filename_extensions": ".ifd",
     }
 
     PARAMETERS = {"arguments": "-V 2p"}

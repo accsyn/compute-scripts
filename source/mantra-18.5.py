@@ -28,7 +28,7 @@ try:
         sys.path.append(os.environ['ACCSYN_COMPUTE_COMMON_PATH'])
     from common import Common
 except ImportError as e:
-    print >>sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
+    print >> sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
     raise
 
 
@@ -45,7 +45,7 @@ class App(Common):
         "default_range": "1001-1100",
         "default_bucketsize": 1,
         "max_bucketsize": 1,
-        "filename_extensions": ".ifd"
+        "filename_extensions": ".ifd",
     }
 
     PARAMETERS = {"arguments": "-V 2p"}
@@ -103,19 +103,23 @@ class App(Common):
             if os.path.exists(p_base):
                 candidates = []
                 for fn in os.listdir(p_base):
-                    if fn.startswith(prefix) and -1<fn.find(version+'.'):
+                    if fn.startswith(prefix) and -1 < fn.find(version + '.'):
                         candidates.append(fn)
                 if 0 < len(candidates):
                     dirname = None
                     if preferred_version:
                         for candidate in candidates:
-                            if -1<candidate.find(preferred_version):
+                            if -1 < candidate.find(preferred_version):
                                 dirname = candidate
                                 break
                         if dirname is None:
-                            Common.warning('Could not find preferred Houdini version: {}, falling back on latest.'.format(preferred_version))
+                            Common.warning(
+                                'Could not find preferred Houdini version: {}, falling back on latest.'.format(
+                                    preferred_version
+                                )
+                            )
                     if dirname is None:
-                        dirname = sorted(candidates)[-1] # Pick highest version
+                        dirname = sorted(candidates)[-1]  # Pick highest version
                     return os.path.join(p_base, dirname)
                 else:
                     raise Exception('No {0} application version found on system!'.format(prefix))
@@ -133,9 +137,20 @@ class App(Common):
         if Common.is_lin():
             return os.path.join(find_houdini('/opt', 'hfs', '18.5'), "bin", "mantra")
         elif Common.is_mac():
-            return os.path.join(find_houdini('/Applications/Houdini', 'Houdini', '18.5'), "Frameworks", "Houdini.framework", "Versions", "18.5", "Resources", "bin", "mantra")
+            return os.path.join(
+                find_houdini('/Applications/Houdini', 'Houdini', '18.5'),
+                "Frameworks",
+                "Houdini.framework",
+                "Versions",
+                "18.5",
+                "Resources",
+                "bin",
+                "mantra",
+            )
         elif Common.is_win():
-            return os.path.join(find_houdini('"C:\\Program Files\\Side Effects Software', 'Houdini ', '18.5'), "bin", "mantra.exe")
+            return os.path.join(
+                find_houdini('"C:\\Program Files\\Side Effects Software', 'Houdini ', '18.5'), "bin", "mantra.exe"
+            )
 
     def get_envs(self):
         '''Get site specific envs'''

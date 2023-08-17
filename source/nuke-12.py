@@ -43,7 +43,6 @@ except ImportError as e:
 
 
 class App(Common):
-
     __revision__ = 5  # Will be automatically increased each publish
 
     # App configuration
@@ -241,12 +240,12 @@ class App(Common):
 
         sys.stdout.flush()
 
-        if -1<stdout.find('Writing') and -1<stdout.find('took'):
+        if -1 < stdout.find('Writing') and -1 < stdout.find('took'):
             idx = stdout.rfind('/')
             if idx == -1:
                 stdout.rfind('\\')
-            if 1<idx:
-                frame_number = Common.parse_number(stdout[idx:stdout.rfind('took')])
+            if 1 < idx:
+                frame_number = Common.parse_number(stdout[idx : stdout.rfind('took')])
                 if frame_number is not None:
                     self.task_started(frame_number)
 

@@ -40,7 +40,6 @@ except ImportError as e:
 
 
 class App(Common):
-
     __revision__ = 1  # Increment this after each update
 
     # App configuration
@@ -189,7 +188,6 @@ class App(Common):
     def get_creation_flags(self, item):
         '''Always run on low priority on windows'''
         if Common.is_win():
-
             ABOVE_NORMAL_PRIORITY_CLASS = 0x00008000
             BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
             HIGH_PRIORITY_CLASS = 0x00000080

@@ -40,7 +40,6 @@ except ImportError as e:
 
 
 class App(Common):
-
     __revision__ = 2  # Will be automatically increased each publish
 
     # App configuration
