@@ -1,32 +1,31 @@
 '''
     accsyn Common compute app
 
-    Inheritated by all other apps.
+    Inherited by all other apps.
 
     Changelog:
 
-        * v1r33; (Henrik Norin, 23.08.16) Support for post and pre execution functions.
-        * v1r32; (Henrik Norin, 23.05.11) PEP8 code style alignments.
-        * v1r31; (Henrik Norin, 23.03.23) Fixed path conversion bug. Run black.
-        * v1r30; (Henrik Norin, 23.01.17) Support for escaping arguments with whitespaces using "%22spaced value%22"
+        * v1r34; [Henrik Norin, 23.09.03] Change PID print to register it for additional failsafe termination on exit.
+        * v1r33; [Henrik Norin, 23.08.16] Support for post and pre execution functions.
+        * v1r32; [Henrik Norin, 23.05.11] PEP8 code style alignments.
+        * v1r30; [Henrik Norin, 23.01.17] Support for escaping arguments with whitespaces using "%22spaced value%22"
             syntax.
-        * v1r29; (Henrik Norin, 22.11.11) Comply with accsyn v2.2 task progress.
-        * v1r28; (Henrik Norin, 22.10.25) Only print exception on failed path conversion.
-        * v1r27; (Henrik Norin, 22.08.31) Prevented infinite loop on input conversion if to path is same as from path.
-        * v1r26; (Henrik Norin, 22.07.12) Change directory to home.
-        * v1r25; (Henrik Norin, 22.05.12) Separate render app output (public) from accsyn script output (non restricted
+        * v1r29; [Henrik Norin, 22.11.11] Comply with accsyn v2.2 task progress.
+        * v1r27; [Henrik Norin, 22.08.31] Prevented infinite loop on input conversion if to path is same as from path.
+        * v1r26; [Henrik Norin, 22.07.12] Change directory to home.
+        * v1r25; [Henrik Norin, 22.05.12] Separate render app output (public) from accsyn script output (non restricted
             user accessible)
-        * v1r24; (Henrik Norin, 22.05.09) (Localization) An additional convert_path call if a line contains
+        * v1r24; [Henrik Norin, 22.05.09] (Localization) An additional convert_path call if a line contains
             path delimiters, mostly for fully converting Nuke scripts.
-        * v1r23; (Henrik Norin, 22.05.09) Lock taken on clearing output directory.
-        * v1r22; (Henrik Norin, 22.05.09) Support for clearing out output directoru before render starts.
-        * v1r21; (Henrik Norin, 22.05.09) Python backward compability, code style.
-        * v1r20; (Henrik Norin, 21.12.16) Convert input; properly concat paths having multiple slashes.
-        * v1r19; (Henrik Norin, 21.12.16) Support multiple output paths
-        * v1r16; (Henrik Norin) Fixed Windows path conversion bug.
-        * v1r15; (Henrik Norin) Python 3 compliance. OS dependent path conversions.
-        * v1r13; (Henrik Norin) Process creation flags support.
-        * v1r12; (Henrik Norin) Compliance to accsyn v1.4.
+        * v1r23; [Henrik Norin, 22.05.09] Lock taken on clearing output directory.
+        * v1r22; [Henrik Norin, 22.05.09] Support for clearing out output directoru before render starts.
+        * v1r21; [Henrik Norin, 22.05.09] Python backward compability, code style.
+        * v1r20; [Henrik Norin, 21.12.16] Convert input; properly concat paths having multiple slashes.
+        * v1r19; [Henrik Norin, 21.12.16] Support multiple output paths
+        * v1r16; [Henrik Norin] Fixed Windows path conversion bug.
+        * v1r15; [Henrik Norin] Python 3 compliance. OS dependent path conversions.
+        * v1r13; [Henrik Norin] Process creation flags support.
+        * v1r12; [Henrik Norin] Compliance to accsyn v1.4.
         
     This software is provided "as is" - the author and distributor can not be 
     held  responsible for any damage caused by executing this script in any 
@@ -56,7 +55,7 @@ logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, d
 
 
 class Common(object):
-    __revision__ = 33  # Will be automatically increased each publish.
+    __revision__ = 34  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -1159,7 +1158,7 @@ class Common(object):
                     )
             while True:
                 if first_run:
-                    Common.info("Process PID: {0}".format(self.process.pid))
+                    Common.info("Additional accsyn PID({0}) - main process".format(self.process.pid))
                     if stdin:
                         self.process.stdin.write(stdin)
                     first_run = False
