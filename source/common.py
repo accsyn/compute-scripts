@@ -74,19 +74,19 @@ class Common(object):
     # -- APP CONFIG START --
 
     # SETTINGS
-    # Can be retreived during execution from: self.get_compute()["settings"]
-    #  - items; If true, each inpit file can be split and executed in ranges
+    # Can be retrieved during execution from: self.get_compute()["settings"]
+    #  - items; If true, each input file can be split and executed in ranges
     # (render)
     #  - default_range; (items) The default item range.
     #  - default_bucketsize; The default amount of items to dispatch to each
-    # compute node/machone.
+    # compute node/machine.
     #  - filename_extensions: Comma(,) separated list of filename extensions
     # associated with app.
     #  - binary_filename_extensions: Comma(,) separated list of filename
     # extensions that indicated a binary non parseable format.
 
     # PARAMETERS
-    # Can be retreived during execution from: self.get_compute()["parameters"]
+    # Can be retrieved during execution from: self.get_compute()["parameters"]
     #  - arguments; The additional command line arguments to pass on to app.
     #  - remote_os; The operating system ("windows", "linux" or "mac") on
     # machine that submitted the job, used for parsing below.
@@ -423,7 +423,7 @@ class Common(object):
 
     def probe(self):
         '''(OPTIONAL) Return False if not implemented, return True if found,
-        raise execption otherwise.'''
+        raise exception otherwise.'''
         return False
 
     def check_mounts(self):
