@@ -33,7 +33,7 @@ class App(Common):
     __revision__ = 3  # Increment this after each update
 
     # App configuration
-    # IMPORTANT NOTE: This section defines app behaviour and should not be refactored or moved away from the enclosing START/END markers. Read into memory by cloud at start and publish.
+    # IMPORTANT NOTE: This section defines app behaviour and should not be refactored or moved away from the enclosing START/END markers. Read into memory by backend at start and publish.
     # --- Start edit here
     # -- APP CONFIG START --
 
@@ -84,9 +84,9 @@ class App(Common):
         Common.info("")
 
     def probe(self):
-        '''(Optional) Do nothing if found, raise execption otherwise.'''
+        '''(Optional) Do nothing if found, raise exception otherwise.'''
         exe = self.get_executable()
-        assert os.path.exists(exe), "'%s' does not exist!" % exe
+        assert os.path.exists(exe), "'{}' does not exist!".format(exe)
         # TODO, check if correct versions of dependencies
         return True
 

@@ -1,15 +1,13 @@
 '''
 
-    V-Ray Next accsyn compute app script.
+    ffmpeg transcode accsyn compute app script.
 
     Finds and executes app by building a commandline out of 'item'(frame number)
     and parameters provided.
 
     Changelog:
 
-        * v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
-        * v1r2; (Henrik, 22.09-14) Fixed output bug
-        * v1r1; Initial version
+        * v1r1; (Henrik, 23.09-29) Initial version
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -17,7 +15,7 @@
     Author: Henrik Norin, HDR AB
 
 '''
-
+import copy
 import os
 import sys
 import logging
@@ -44,28 +42,28 @@ class App(Common):
 
     # App configuration
     # IMPORTANT NOTE:
-    # This section defines app behaviour and should not be refactored or moved
-    # away from the enclosing START/END markers. Read into memory by backend at
-    # start and publish.
+    #   This section defines app behaviour and should not be refactored or moved
+    #   away from the enclosing START/END markers. Read into memory by backend at
+    #   launch and publish of new app.
     # -- APP CONFIG START --
 
     SETTINGS = {
-        "items": True,
-        "default_range": "1001-1100",
-        "default_bucketsize": 1,
-        "filename_extensions": ".ma,.mb",
-        "binary_filename_extensions": ".mb",
+        "items": False,
+        "multiple_inputs": True,
+        "filename_extensions": ".mov,.mp4,.wmv,.avi,.mpg,.mpeg,.mxf,.m2v,.m4v,.dv,.3gp,.3g2,.flv,.mkv,.vob,.webm",
+        "binary": True,
+        "profiles": {
+            "h264": {
+                "arguments": "-c:v libx264 -c:a aac -vf format=yuv420p -movflags +faststart -strict -2",
+                "description": "Transcode to H264/AAC",
+                "extension": ".mp4"
+            }
+        }
     }
 
-    PARAMETERS = {"project": "", "arguments": "-r vray", "input_conversion": "always"}
+    PARAMETERS = {"arguments": "-y -i ${INPUT} ${PROFILE} ${OUTPUT}", "profile": "h264", "input_conversion": "never"}
 
     ENVS = {}
-
-    VRAY_VERSION = "5.20.01"
-
-    # Have exact V-ray version validated
-    CHECK_VRAY_VERSION = True
-    LIB_REF_SIZES = [45071872, 45083136]
 
     # -- APP CONFIG END --
 
@@ -76,7 +74,7 @@ class App(Common):
     def get_path_version_name():
         p = os.path.realpath(__file__)
         parent = os.path.dirname(p)
-        return (os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0])
+        return os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0]
 
     @staticmethod
     def usage():
@@ -106,11 +104,11 @@ class App(Common):
     def get_executable(self):
         '''(REQUIRED) Return path to executable as string'''
         if Common.is_lin():
-            return "/usr/autodesk/maya2022/bin/Render"
+            return "/usr/local/bin/ffmpeg"
         elif Common.is_mac():
-            return "/Applications/Autodesk/maya2022/Maya.app/Contents/bin/Render"
+            return "/opt/local/bin/ffmpeg"
         elif Common.is_win():
-            return "C:\\Program Files\\Autodesk\\Maya2022\\bin\\Render.exe"
+            return "C:\\ffmpeg\\bin\\ffmpeg.exe"
 
     def get_envs(self):
         '''Return site specific envs here'''
@@ -119,57 +117,74 @@ class App(Common):
 
     def get_commandline(self, item):
         '''(REQUIRED) Return command line as a string array'''
-        # Check if correct version of V-ray - verify size of main library
-        path_vray_dll = None
-        if Common.is_lin():
-            pass  # No version check here, defined by envs above
-        elif Common.is_mac():
-            raise Exception("V-ray for Maya not supported on Mac yet!")
-        elif Common.is_win():
-            path_vray_dll = "C:\\Program Files\\Autodesk\\Maya2020\\vray\\bin\\vray.dll"
-            assert os.path.exists(path_vray_dll), (
-                'V-ray for Maya 2020 not ' 'properly installed! (missing: "%s")' % path_vray_dll
-            )
-            if App.CHECK_VRAY_VERSION:
-                dll_size_mismatch = -1
-                for dll_size_match in App.LIB_REF_SIZES:
-                    dll_size = os.path.getsize(path_vray_dll)
-                    if dll_size == dll_size_match:
-                        dll_size_mismatch = None
-                        break
-                    else:
-                        dll_size_mismatch = dll_size
-                assert (
-                    dll_size_mismatch is None
-                ), "V-ray for Maya {} is not the correct installed version on this node (DLL size:{})!".format(
-                    App.VRAY_VERSION, os.path.getsize(dll_size_mismatch)
-                )
-
         args = []
-        if "parameters" in self.get_compute():
-            parameters = self.get_compute()["parameters"]
-            if 0 < len(parameters.get("arguments") or ""):
-                arguments = parameters["arguments"]
-                if 0 < len(arguments):
-                    args.extend(arguments.split(" "))
-            if "project" in parameters and 0 < len(parameters["project"]):
-                args.extend(["-proj", self.normalize_path(parameters["project"])])
-            if "renderlayer" in parameters:
-                args.extend(["-rl", parameters["renderlayer"]])
-        if self.item and self.item != "all":
-            # Add range
-            start = end = self.item
-            if -1 < self.item.find("-"):
-                parts = self.item.split("-")
-                start = parts[0]
-                end = parts[1]
-            args.extend(["-s", str(start), "-e", str(end)])
+        if "parameters" not in self.get_compute():
+            raise Exception("No parameters for app")
+
+        parameters = self.get_compute()["parameters"]
+
+        if "arguments" not in parameters:
+            raise Exception("No arguments for app")
+
+        arguments = str(parameters["arguments"])
+
+        for required_argument_spec in ["${INPUT}", "${OUTPUT}"]:
+            if required_argument_spec not in arguments:
+                raise Exception("No %s in arguments for app" % required_argument_spec)
+
+        input_path = self.get_input()
+
+        if not os.path.exists(input_path):
+            Common.warning("Input media not found @ {}!".format(input_path))
+
+        arguments = arguments.replace("${INPUT}", input_path)
+
+        profile_data = None
+        profile_arguments = ""
+        if "${PROFILE}" in arguments:
+            profile = (parameters.get("profile", "") or "").strip()
+
+            if len(profile) > 0:
+                # Locate profile among profiles
+                profiles = App.SETTINGS["profiles"]
+                if profile not in profiles:
+                    raise Exception("Profile '{}' not found among profiles".format(profile))
+                profile_data = profiles[profile]
+                profile_arguments = profile_data["arguments"]
+            else:
+                Common.warning("Not profile specified, no transcoding will be done!")
+
+            arguments = arguments.replace("${PROFILE}", profile_arguments)
+
+        suffix = ""
         if "output" in self.get_compute():
-            # Output has already been converted to local platform
-            args.extend(["-rd", self.get_compute()["output"]])
-        # Input has already been converted to local platform
-        p_input = self.normalize_path(self.get_compute()["input"])
-        args.extend([p_input])
+            output_path = self.normalize_path(self.get_compute()["output"])
+        else:
+            Common.warning("No output path defined, will output to same folder as input.")
+            output_path = os.path.dirname(input_path)
+            suffix = "_transcoded"
+
+        extension = ""
+        if profile_data and "extension" in profile_data:
+            extension = profile_data["extension"]
+
+        if not os.path.exists(output_path):
+            Common.warning("Output media path not found @ {}, creating".format(output_path))
+            os.makedirs(output_path)
+        elif output_path == os.path.dirname(input_path) and suffix == "":
+            Common.warning("Output path is same as input path, will overwrite input media!")
+
+        filename_output = os.path.basename(input_path)
+        if suffix != "" or extension != "":
+            filename_output = os.path.splitext(filename_output)[0] + suffix + (extension if extension != "" else os.path.splitext(filename_output)[1])
+
+        output_path = os.path.join(output_path, filename_output)
+        arguments = arguments.replace("${OUTPUT}", output_path)
+
+        args.extend(arguments.split(" "))
+
+        print("Transcoding '{}' => '{}' using ffmpeg, arguments: {}".format(input_path, output_path, profile_arguments))
+
         if Common.is_lin():
             retval = [self.get_executable()]
             retval.extend(args)

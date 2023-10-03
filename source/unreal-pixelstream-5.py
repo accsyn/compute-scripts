@@ -51,7 +51,7 @@ class App(Common):
     # App configuration
     # IMPORTANT NOTE:
     # This section defines app behaviour and should not be refactored or moved
-    # away from the enclosing START/END markers. Read into memory by cloud at
+    # away from the enclosing START/END markers. Read into memory by backend at
     # start and publish.
     # -- APP CONFIG START --
 
@@ -112,7 +112,7 @@ class App(Common):
     def probe(self):
         '''(Optional) Do nothing if found, raise exeception otherwise.'''
         exe = self.get_executable()
-        assert os.path.exists(exe), "'%s' does not exist!" % exe
+        assert os.path.exists(exe), "'{}' does not exist!".format(exe)
         # TODO, check if correct version
         return True
 

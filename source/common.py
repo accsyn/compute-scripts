@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r35; [Henrik Norin, 23.10.03] Support multiple inputs.
         * v1r34; [Henrik Norin, 23.09.03] Change PID print to register it for additional failsafe termination on exit.
         * v1r33; [Henrik Norin, 23.08.16] Support for post and pre execution functions.
         * v1r32; [Henrik Norin, 23.05.11] PEP8 code style alignments.
@@ -74,19 +75,19 @@ class Common(object):
     # -- APP CONFIG START --
 
     # SETTINGS
-    # Can be retreived during execution from: self.get_compute()["settings"]
-    #  - items; If true, each inpit file can be split and executed in ranges
+    # Can be retrieved during execution from: self.get_compute()["settings"]
+    #  - items; If true, each input file can be split and executed in ranges
     # (render)
     #  - default_range; (items) The default item range.
     #  - default_bucketsize; The default amount of items to dispatch to each
-    # compute node/machone.
+    # compute node/machine.
     #  - filename_extensions: Comma(,) separated list of filename extensions
     # associated with app.
     #  - binary_filename_extensions: Comma(,) separated list of filename
     # extensions that indicated a binary non parseable format.
 
     # PARAMETERS
-    # Can be retreived during execution from: self.get_compute()["parameters"]
+    # Can be retrieved during execution from: self.get_compute()["parameters"]
     #  - arguments; The additional command line arguments to pass on to app.
     #  - remote_os; The operating system ("windows", "linux" or "mac") on
     # machine that submitted the job, used for parsing below.
@@ -423,7 +424,7 @@ class Common(object):
 
     def probe(self):
         '''(OPTIONAL) Return False if not implemented, return True if found,
-        raise execption otherwise.'''
+        raise exception otherwise.'''
         return False
 
     def check_mounts(self):
@@ -593,14 +594,45 @@ class Common(object):
                 time.sleep(1)
         return False, lock_path
 
+    def get_input(self):
+        ''' Return the input file, single entry or based on item/other parameter. Can be overridden by app as needed'''
+        if "input" in self.get_compute():
+            input = self.get_compute()["input"]
+
+            if not isinstance(input, list):
+                return input
+            else:
+                if not self.item:
+                    raise Exception("No item (input file # to process) for app")
+                index = int(self.item)
+                if index < 0 or index >= len(input):
+                    raise Exception("Item/file #{} not found among inputs".format(self.item))
+                return input[index]
+
+        return None
+
+    def set_input(self, value):
+        ''' Set the input file, single entry or based on item/other parameter. Can be overridden by app as needed'''
+
+        input = self.get_compute()["input"]
+        if not isinstance(input, list):
+            self.get_compute()["input"] = value
+        else:
+            if not self.item:
+                raise Exception("No item (input file # to process) for app")
+            index = int(self.item)
+            if index < 0 or index >= len(input):
+                raise Exception("Item/file #{} not found among inputs".format(self.item))
+            input[index] = value
+
     def prepare(self):
         '''Prepare execution - localize files.'''
         # Any input file?
-        p_input = None
-        if "input" in self.get_compute():
-            p_input = self.normalize_path(self.get_compute()["input"])
+        p_input = self.get_input()
+        if p_input:
+            p_input = self.normalize_path(p_input)
             # Store it
-            self.get_compute()["input"] = p_input
+            self.set_input(p_input)
             if p_input and -1 < p_input.find(os.sep):
                 if not os.path.exists(p_input):
                     Common.warning("(Localization) Input file/scene does not exists @ '{}'!".format(p_input))
