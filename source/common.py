@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r36; [Henrik Norin, 23.10.18] Support envs supplied with job.
         * v1r35; [Henrik Norin, 23.10.03] Support multiple inputs.
         * v1r34; [Henrik Norin, 23.09.03] Change PID print to register it for additional failsafe termination on exit.
         * v1r33; [Henrik Norin, 23.08.16] Support for post and pre execution functions.
@@ -56,7 +57,7 @@ logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, d
 
 
 class Common(object):
-    __revision__ = 34  # Will be automatically increased each publish.
+    __revision__ = 35  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -158,7 +159,7 @@ class Common(object):
                 return Common.OS_MAC
             else:
                 return Common.OS_LINUX
-        elif sys.platform == "linux2":
+        elif sys.platform in ["linux", "linux2"]:
             if os.name == "posix":
                 return Common.OS_LINUX
             else:
@@ -449,8 +450,10 @@ class Common(object):
 
     def convert_input(self, f_src, f_dst, conversions):
         '''Basic ASCII file path conversion, should be overridden by app to
-        support more. Raise an exception is localization fails.'''
+        support custom conversions. Raise an exception is localization fails.'''
         line_no = 1
+        # Collect envs
+        envs = self.get_common_envs()
         for line in f_src:
             try:
                 had_conversion = False
@@ -470,13 +473,13 @@ class Common(object):
                         if idx == -1:
                             break
                         line = (line[0:idx] if 0 < idx else "") + Common.concat_paths(
-                            self.convert_path(path_to),
+                            self.convert_path(path_to, envs=envs),
                             (line[idx + len(path_from) :] if idx + len(path_from) < len(line) else ""),
                         )
                         had_conversion = True
                 if had_conversion:
                     if -1 < line.find("/") or -1 < line.find("\\"):
-                        line = self.convert_path(line)
+                        line = self.convert_path(line, envs=envs)
                     if line != line_orig:
                         self.info("(input convert) '{0}'>'{1}'".format(line_orig, line))
             except:
@@ -485,8 +488,16 @@ class Common(object):
             f_dst.write("{0}".format(line))
             line_no += 1
 
-    def convert_path(self, p):
+    def convert_path(self, p, envs=None):
         '''Can be overridden by app to provide further path alignment.'''
+        if envs:
+            # Replace ${ENV} occurrences in path
+            for key, value in list(envs.items()):
+                search_str = "${%s}" % key
+                if search_str in p:
+                    p = p.replace(search_str, value)
+                    self.debug("(Convert path '{}') Replaced with env {}={}".format(
+                        p, key, value))
         return p
 
     def get_executable(self):
@@ -712,7 +723,7 @@ class Common(object):
                                             break
                                     if remote_prefix and local_prefix:
                                         if remote_prefix != local_prefix:
-                                            p_input_localized = "{}_accsynlocalzed_hq_{}{}".format(
+                                            p_input_localized = "{}_accsynlocalized_hq_{}{}".format(
                                                 p_input_prefix, self.get_os(), p_localized_ext
                                             )
                                             Common.info(
@@ -1009,7 +1020,19 @@ class Common(object):
         pass
 
     def get_common_envs(self):
-        return self.get_envs()
+        result = self.get_envs()
+        if 'envs' in self.get_compute():
+            # Encode envs, either given directly or in platform sub dicts
+            platform_envs = False
+            if 'common' in self.get_compute()['envs'] and isinstance(self.get_compute()['envs']['common'], dict):
+                platform_envs = True
+            if platform_envs:
+                result.update(self.get_compute()['envs']['common'])
+                if self.get_os() in self.get_compute()['envs']:
+                    result.update(self.get_compute()['envs'][self.get_os()])
+            else:
+                result.update(self.get_compute()['envs'])
+        return result
 
     @staticmethod
     def build_arguments(arguments):

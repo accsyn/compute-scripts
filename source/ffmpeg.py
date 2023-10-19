@@ -15,14 +15,9 @@
     Author: Henrik Norin, HDR AB
 
 '''
-import copy
 import os
 import sys
-import logging
 import traceback
-import json
-import time
-import datetime
 
 try:
     if 'ACCSYN_COMPUTE_COMMON_PATH' in os.environ:
@@ -104,7 +99,7 @@ class App(Common):
     def get_executable(self):
         '''(REQUIRED) Return path to executable as string'''
         if Common.is_lin():
-            return "/usr/local/bin/ffmpeg"
+            return "/usr/bin/ffmpeg"
         elif Common.is_mac():
             return "/opt/local/bin/ffmpeg"
         elif Common.is_win():
