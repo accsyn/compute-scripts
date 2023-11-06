@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r37; [Henrik Norin, 23.10.31] Support arguments both as string and list type.
         * v1r36; [Henrik Norin, 23.10.18] Support envs supplied with job.
         * v1r35; [Henrik Norin, 23.10.03] Support multiple inputs.
         * v1r34; [Henrik Norin, 23.09.03] Change PID print to register it for additional failsafe termination on exit.
@@ -57,7 +58,7 @@ logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, d
 
 
 class Common(object):
-    __revision__ = 35  # Will be automatically increased each publish.
+    __revision__ = 36  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -1042,17 +1043,22 @@ class Common(object):
         -r arnold -rl %22layer1 layer2%22 -v
 
         '''
-        arguments = arguments or ""
-        if -1 < arguments.find("%22"):
-            result = []
-            # Preprocess
-            for index, part in enumerate(arguments.split("%22")):
-                if (index % 2) == 0:
-                    result.extend([s for s in part.split(" ") if 0 < len(s.strip())])  # Normal arg
-                else:
-                    result.append(part)  # An arg with whitespaces
+        if arguments is None:
+            return ""
+        if not isinstance(arguments, list):
+            arguments = arguments or ""
+            if -1 < arguments.find("%22"):
+                result = []
+                # Preprocess
+                for index, part in enumerate(arguments.split("%22")):
+                    if (index % 2) == 0:
+                        result.extend([s for s in part.split(" ") if 0 < len(s.strip())])  # Normal arg
+                    else:
+                        result.append(part)  # An arg with whitespaces
+            else:
+                result = arguments.split(" ")
         else:
-            result = arguments.split(" ")
+            result = " ".join(arguments)
         return result
 
     @staticmethod

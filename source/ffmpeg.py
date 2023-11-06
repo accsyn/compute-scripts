@@ -7,7 +7,8 @@
 
     Changelog:
 
-        * v1r1; (Henrik, 23.09-29) Initial version
+        * v1r4; (Henrik, 23.11.01) Fix profile bug; H265 profile.
+        * v1r1; (Henrik, 23.09.29) Initial version
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -15,9 +16,11 @@
     Author: Henrik Norin, HDR AB
 
 '''
+import copy
 import os
 import sys
 import traceback
+
 
 try:
     if 'ACCSYN_COMPUTE_COMMON_PATH' in os.environ:
@@ -33,7 +36,7 @@ except ImportError as e:
 
 
 class App(Common):
-    __revision__ = 1  # Increment this after each update
+    __revision__ = 4  # Increment this after each update
 
     # App configuration
     # IMPORTANT NOTE:
@@ -99,7 +102,10 @@ class App(Common):
     def get_executable(self):
         '''(REQUIRED) Return path to executable as string'''
         if Common.is_lin():
-            return "/usr/bin/ffmpeg"
+            result = "/usr/local/bin/ffmpeg"
+            if not os.path.exists(result):
+                result = "/usr/bin/ffmpeg"
+            return result
         elif Common.is_mac():
             return "/opt/local/bin/ffmpeg"
         elif Common.is_win():
@@ -134,22 +140,25 @@ class App(Common):
 
         arguments = arguments.replace("${INPUT}", input_path)
 
+        profile = None
+        if 'profile' in self.get_compute():
+            profile = self.get_compute()['profile']
+        elif "${PROFILE}" in arguments:
+            profile = (parameters.get("profile", "") or "").strip()
         profile_data = None
         profile_arguments = ""
-        if "${PROFILE}" in arguments:
-            profile = (parameters.get("profile", "") or "").strip()
 
-            if len(profile) > 0:
-                # Locate profile among profiles
-                profiles = App.SETTINGS["profiles"]
-                if profile not in profiles:
-                    raise Exception("Profile '{}' not found among profiles".format(profile))
-                profile_data = profiles[profile]
-                profile_arguments = profile_data["arguments"]
-            else:
-                Common.warning("Not profile specified, no transcoding will be done!")
+        if profile is not None and len(profile) > 0:
+            # Locate profile among profiles
+            profiles = App.SETTINGS["profiles"]
+            if profile not in profiles:
+                raise Exception("Profile '{}' not found among profiles".format(profile))
+            profile_data = profiles[profile]
+            profile_arguments = profile_data["arguments"]
+        else:
+            Common.warning("Not profile specified, no transcoding will be done!")
 
-            arguments = arguments.replace("${PROFILE}", profile_arguments)
+        arguments = arguments.replace("${PROFILE}", profile_arguments)
 
         suffix = ""
         if "output" in self.get_compute():
@@ -178,7 +187,8 @@ class App(Common):
 
         args.extend(arguments.split(" "))
 
-        print("Transcoding '{}' => '{}' using ffmpeg, arguments: {}".format(input_path, output_path, profile_arguments))
+        print("Transcoding '{}' => '{}' using ffmpeg profile {}, arguments: {}".format(
+            input_path, output_path, profile, profile_arguments))
 
         if Common.is_lin():
             retval = [self.get_executable()]
