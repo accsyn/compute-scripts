@@ -110,9 +110,9 @@ class App(Common):
         # Check if correct version here
         return True
 
-    def convert_path(self, p):
+    def convert_path(self, p, envs=None):
         '''
-        Called with translated path, during input conversion, before written to file.
+        (Override) Called with translated path, during input conversion, before written to file.
         Suitable for turning Windows backslashes to forward slashes with Nuke.
         '''
         return p.replace("\\", "/")

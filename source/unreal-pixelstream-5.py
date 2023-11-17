@@ -11,6 +11,7 @@
 
     Changelog:
 
+        v1r5; [231117, Henrik Norin] Fixed streamer disconnect detect bug.
         v1r4; [230905, Henrik Norin] Terminate+retry on socket already in use & Streamer disconnect. SFU port increment.
         v1r3; [230903, Henrik Norin] Kill report turn server PID, enabling termination on exit.
         v1r2; [230901, Henrik Norin] Bug fixes; Changed port.
@@ -46,7 +47,7 @@ except ImportError as e:
 
 
 class App(Common):
-    __revision__ = 4  # Increment this after each update
+    __revision__ = 5  # Increment this after each update
 
     # App configuration
     # IMPORTANT NOTE:
@@ -336,7 +337,7 @@ WHILE (get-process -ID $NodePid) {
                         time.sleep(5.0)
                         self.terminate_web_process = True
                         self.webserver_executing = None
-                    elif line.find("streamer DefaultStreamer disconnected"):
+                    elif line.find("streamer DefaultStreamer disconnected") > -1:
                         # Engine crashed
                         Common.warning("Unreal disconnected from Pixelstream server, bailing out")
                         self.terminate_web_process = True
