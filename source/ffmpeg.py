@@ -57,7 +57,7 @@ class App(Common):
                 "arguments": "-c:v libx264 -c:a aac -vf format=yuv420p -movflags +faststart -strict -2",
                 "description": "Transcode to H264/AAC",
                 "suffix": "_${PROFILE_NAME}",
-                "extension": ".mp4",
+                "extension": ".mp4"
             }
         }
     }
