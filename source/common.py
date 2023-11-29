@@ -5,6 +5,8 @@
 
     Changelog:
 
+        * v1r38; [Henrik Norin, 23.11.20] Prevent crash on non encodeable stdout/stderr. Support for escaping backlash in
+        arguments using %5C syntax, %20 to whitespace. Support variable substitution.
         * v1r37; [Henrik Norin, 23.10.31] Support arguments both as string and list type.
         * v1r36; [Henrik Norin, 23.10.18] Support envs supplied with job.
         * v1r35; [Henrik Norin, 23.10.03] Support multiple inputs.
@@ -21,7 +23,7 @@
         * v1r24; [Henrik Norin, 22.05.09] (Localization) An additional convert_path call if a line contains
             path delimiters, mostly for fully converting Nuke scripts.
         * v1r23; [Henrik Norin, 22.05.09] Lock taken on clearing output directory.
-        * v1r22; [Henrik Norin, 22.05.09] Support for clearing out output directoru before render starts.
+        * v1r22; [Henrik Norin, 22.05.09] Support for clearing out output directory before render starts.
         * v1r21; [Henrik Norin, 22.05.09] Python backward compability, code style.
         * v1r20; [Henrik Norin, 21.12.16] Convert input; properly concat paths having multiple slashes.
         * v1r19; [Henrik Norin, 21.12.16] Support multiple output paths
@@ -58,7 +60,7 @@ logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, d
 
 
 class Common(object):
-    __revision__ = 36  # Will be automatically increased each publish.
+    __revision__ = 37  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -1036,18 +1038,23 @@ class Common(object):
         return result
 
     @staticmethod
-    def build_arguments(arguments):
+    def build_arguments(arguments, escaped_quotes=True, join=True):
         '''
-        Support url encoded quotes, for example:
+        Convert arguments, if *escaped_quotes* is true url encoded quotes is
+        supported in *arguments* to allow whitespace in arguments, using %22 notatation.
+
+        Example:
 
         -r arnold -rl %22layer1 layer2%22 -v
 
+        %5C is also substituted with backlash (\) and #20 is substituted with space ( )
+
         '''
         if arguments is None:
-            return ""
+            return []
         if not isinstance(arguments, list):
-            arguments = arguments or ""
-            if -1 < arguments.find("%22"):
+            arguments = (arguments or "").replace("%5C", "\\")
+            if -1 < arguments.find("%22") and escaped_quotes:
                 result = []
                 # Preprocess
                 for index, part in enumerate(arguments.split("%22")):
@@ -1058,8 +1065,22 @@ class Common(object):
             else:
                 result = arguments.split(" ")
         else:
-            result = " ".join(arguments)
-        return result
+            result = arguments
+        result = [argument.replace("%5C", "\\").replace("%22", '"').replace("%20", " ") for argument in result]
+        if join:
+            return " ".join(result)
+        else:
+            return result
+
+    @staticmethod
+    def substitute(s, mapping):
+        ''' Substitute ${KEY} with VALUE for items in *mapping* + environment variables.'''
+        if not mapping:
+            mapping = {}
+        mapping.update(os.environ.items())
+        for key, value in list(mapping.items()):
+            s = s.replace("${%s}" % key, value)
+        return s
 
     @staticmethod
     def recursive_kill_windows_pid(pid):
@@ -1226,16 +1247,19 @@ class Common(object):
 
                 # Read data waiting for us in pipes
                 stdout = Common.safely_printable(self.process.stdout.readline())
-                print("!{}".format(stdout), end="")
-                sys.stdout.flush()
+                try:
+                    print("!{}".format(stdout), end="")
+                    sys.stdout.flush()
 
-                process_result = self.process_output(stdout, "")
-                if process_result is not None:
-                    Common.warning("Pre-emptive terminating process (pid: {0}).".format(self.process.pid))
-                    exitcode = process_result
-                    break
-                elif stdout == "" and self.process.poll() is not None:
-                    break
+                    process_result = self.process_output(stdout, "")
+                    if process_result is not None:
+                        Common.warning("Pre-emptive terminating process (pid: {0}).".format(self.process.pid))
+                        exitcode = process_result
+                        break
+                    elif stdout == "" and self.process.poll() is not None:
+                        break
+                except:
+                    Common.warning(traceback.format_exc())
 
             self.process.communicate()
             if exitcode is None:

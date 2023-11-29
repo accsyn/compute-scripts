@@ -7,6 +7,8 @@
 
     Changelog:
 
+        * v1r5; (Henrik, 23.11.24) Support for escape sequences in profile. Support
+        space in input path.
         * v1r4; (Henrik, 23.11.01) Fix profile bug; H265 profile.
         * v1r1; (Henrik, 23.09.29) Initial version
 
@@ -54,7 +56,8 @@ class App(Common):
             "h264": {
                 "arguments": "-c:v libx264 -c:a aac -vf format=yuv420p -movflags +faststart -strict -2",
                 "description": "Transcode to H264/AAC",
-                "extension": ".mp4"
+                "suffix": "_${PROFILE_NAME}",
+                "extension": ".mp4",
             }
         }
     }
@@ -138,7 +141,7 @@ class App(Common):
         if not os.path.exists(input_path):
             Common.warning("Input media not found @ {}!".format(input_path))
 
-        arguments = arguments.replace("${INPUT}", input_path)
+        arguments = arguments.replace("${INPUT}", input_path.replace(" ", "%20")) # Preserve whitespace
 
         profile = None
         if 'profile' in self.get_compute():
@@ -158,15 +161,24 @@ class App(Common):
         else:
             Common.warning("Not profile specified, no transcoding will be done!")
 
-        arguments = arguments.replace("${PROFILE}", profile_arguments)
+        arguments = arguments.replace("${PROFILE}", Common.build_arguments(profile_arguments, escaped_quotes=False))
 
         suffix = ""
+        if profile_data and "suffix" in profile_data:
+            suffix = Common.substitute(profile_data["suffix"], {
+                "PROFILE_NAME": profile
+            })
+
         if "output" in self.get_compute():
             output_path = self.normalize_path(self.get_compute()["output"])
         else:
-            Common.warning("No output path defined, will output to same folder as input.")
-            output_path = os.path.dirname(input_path)
-            suffix = "_transcoded"
+            if profile_data and 'default_output' in profile_data:
+                Common.info("No output path defined, falling back on default output: {}".format(
+                    profile_data['default_output']))
+                output_path = self.normalize_path(profile_data['default_output'])
+            else:
+                Common.warning("No output path defined, will output to same folder as input.")
+                output_path = os.path.dirname(input_path)
 
         extension = ""
         if profile_data and "extension" in profile_data:
@@ -176,16 +188,19 @@ class App(Common):
             Common.warning("Output media path not found @ {}, creating".format(output_path))
             os.makedirs(output_path)
         elif output_path == os.path.dirname(input_path) and suffix == "":
-            Common.warning("Output path is same as input path, will overwrite input media!")
+            suffix = "_transcoded"
+            Common.warning("Output path is same as input path, appending '_transcoded' suffix to prevent overwrite of "
+                           "input media!")
 
         filename_output = os.path.basename(input_path)
         if suffix != "" or extension != "":
-            filename_output = os.path.splitext(filename_output)[0] + suffix + (extension if extension != "" else os.path.splitext(filename_output)[1])
+            filename_output = os.path.splitext(filename_output)[0] + suffix + (extension if extension != "" else
+                                                                               os.path.splitext(filename_output)[1])
 
         output_path = os.path.join(output_path, filename_output)
-        arguments = arguments.replace("${OUTPUT}", output_path)
+        arguments = arguments.replace("${OUTPUT}", output_path.replace(" ", "%20"))
 
-        args.extend(arguments.split(" "))
+        args.extend(Common.build_arguments(arguments, join=False))
 
         print("Transcoding '{}' => '{}' using ffmpeg profile {}, arguments: {}".format(
             input_path, output_path, profile, profile_arguments))

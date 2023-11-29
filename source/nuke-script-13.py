@@ -175,6 +175,7 @@ class App(Common):
             parameters = self.get_compute()['parameters']
 
             if 0 < len(parameters.get('arguments') or ''):
+                arguments = parameters['arguments']
                 args.extend(Common.build_arguments(arguments))
 
         input_path = self.normalize_path(self.data['compute']['input'])
@@ -183,7 +184,7 @@ class App(Common):
         if 0 < len(parameters.get('script_arguments') or ''):
             args.extend(parameters['script_arguments'])
 
-        # Find out preffered nuke version from script, expect:
+        # Find out preferred nuke version from script, expect:
         #   #! C:/Program Files/Nuke10.0v6/nuke-10.0.6.dll -nx
         #   version 10.0 v6
         #   define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
