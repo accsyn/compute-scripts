@@ -1,22 +1,18 @@
-''' 
+'''
 
-    Nuke v11 accsyn compute app script.
+    Nuke v14 accsyn compute app script.
 
     Finds and executes Nuke by building a commandline out of 'item'(frame number)
     and parameters provided.
 
     Changelog:
 
-        * v1r5; (Henrik Norin, 22.11.11) Report progress frame number/uri within a bucket. Url encoded arguments support.
-        * v1r4; Python 3 compliance. Convert windows paths to Nuke (/) during input file conversion.
-        * v1r3; Code style
-        * v1r2; Parse Nuke output and finish render if hangs 5s on "Total render time:"
-        * v1r1; Compliance to accsyn v1.4.
+        * v1r1; (Henrik Norin, 23.01.17) Initial version cloned from Nuke 14 script.
 
-    This software is provided "as is" - the author and distributor can not be held 
+    This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
 
-    Author: Henrik Norin, HDR AB
+    Author: Henrik Norin, accsyn / HDR AB
 
 '''
 
@@ -30,8 +26,8 @@ import threading
 import time
 
 try:
-    if "ACCSYN_COMPUTE_COMMON_PATH" in os.environ:
-        sys.path.append(os.environ["ACCSYN_COMPUTE_COMMON_PATH"])
+    if 'ACCSYN_COMPUTE_COMMON_PATH' in os.environ:
+        sys.path.append(os.environ['ACCSYN_COMPUTE_COMMON_PATH'])
     from common import Common
 except ImportError as e:
     sys.stderr.write(
@@ -43,7 +39,7 @@ except ImportError as e:
 
 
 class App(Common):
-    __revision__ = 4  # Will be automatically increased each publish
+    __revision__ = 1  # Will be automatically increased each publish
 
     # App configuration
     #
@@ -65,11 +61,11 @@ class App(Common):
         "vendor": "The Foundry"
     }
 
-    PARAMETERS = {"mapped_share_paths": [], "arguments": "-txV", "input_conversion": "auto"}
+    PARAMETERS = {"mapped_share_paths": [], "arguments": ["-txV"], "input_conversion": "auto"}
 
     # -- APP CONFIG END --
 
-    NUKE_VERSION = "11"
+    NUKE_VERSION = '15'
 
     def __init__(self, argv):
         super(App, self).__init__(argv)
@@ -86,7 +82,7 @@ class App(Common):
         (unused_cp, cv, cn) = Common.get_path_version_name()
         (unused_p, v, n) = App.get_path_version_name()
         Common.info(
-            '   Accsyn compute app "{}" v{}-{}(common: v{}-{}) '.format(
+            '   accsyn compute app "{0}" v{1}-{2}(common: v{3}-{4}) '.format(
                 n, v, App.__revision__, cv, Common.__revision__
             )
         )
@@ -117,7 +113,7 @@ class App(Common):
         (Override) Called with translated path, during input conversion, before written to file.
         Suitable for turning Windows backslashes to forward slashes with Nuke.
         '''
-        return p.replace("\\", "/")
+        return p.replace('\\', '/')
 
     def get_envs(self):
         '''(Optional) Get dynamic environment variables'''
@@ -142,40 +138,39 @@ class App(Common):
                     p_executable_rel = None
                     # Find executable
                     if Common.is_mac():
-                        p_executable_rel = os.path.join("{}.app".format(dirname), "Contents", "MacOS")
+                        p_executable_rel = os.path.join('{0}.app'.format(dirname), 'Contents', 'MacOS')
                         p_search_executable = os.path.join(p_app, p_executable_rel)
                     else:
                         p_search_executable = p_app
                     for fn in os.listdir(p_search_executable):
                         if fn.lower().startswith(prefix.lower()):
-                            if Common.is_win() and not fn.lower().endswith(".exe"):
+                            if Common.is_win() and not fn.lower().endswith('.exe'):
                                 continue
                             p_executable_rel = (
-                                '{}{}'.format(p_executable_rel, os.sep) if p_executable_rel else ""
+                                '{0}{1}'.format(p_executable_rel, os.sep) if p_executable_rel else ""
                             ) + fn
                             break
                     return p_app, p_executable_rel
                 else:
-                    raise Exception('No {} application version found on system!'.format(prefix))
+                    raise Exception('No {0} application version found on system!'.format(prefix))
             else:
-                raise Exception('Application base directory "{}" not found on system!'.format(p_base))
+                raise Exception('Application base directory "{0}" not found on system!'.format(p_base))
 
         # Use highest version
         p_base = p_app = None
         if Common.is_lin():
-            p_base = "/usr/local"
+            p_base = '/usr/local'
         elif Common.is_mac():
-            p_base = "/Applications"
+            p_base = '/Applications'
         elif Common.is_win():
-            p_base = "C:\\Program Files"
+            p_base = 'C:\\Program Files'
+        p_executable_rel = None
         if p_base:
-            p_app, p_executable_rel = find_executable(p_base, "Nuke{}".format(App.NUKE_VERSION))
+            p_app, p_executable_rel = find_executable(p_base, 'Nuke{0}'.format(App.NUKE_VERSION))
+        if p_executable_rel is None:
+            raise Exception('Nuke executable not found, looked in {0}!'.format(p_app))
         if p_app:
-            return os.path.join(
-                p_app,
-                #'nuke{}{}'.format(App.NUKE_VERSION, '.exe' if Common.is_win() else ''))
-                p_executable_rel,
-            )
+            return os.path.join(p_app, p_executable_rel)
         else:
             raise Exception('Nuke not supported on this platform!')
 
@@ -183,43 +178,39 @@ class App(Common):
         '''(REQUIRED) Return command line as a string array'''
 
         args = []
-        if "parameters" in self.get_compute():
-            parameters = self.get_compute()["parameters"]
+        if 'parameters' in self.get_compute():
+            parameters = self.get_compute()['parameters']
 
-            if 0 < len(parameters.get("arguments") or ""):
-                arguments = parameters["arguments"]
+            if 0 < len(parameters.get('arguments') or ''):
+                arguments = parameters['arguments']
                 if 0 < len(arguments):
                     args.extend(Common.build_arguments(arguments))
-
-            # Grab a workstation license?
-            hostname = socket.gethostname().lower()
-            if hostname.find("a") == 0 or hostname.find("b") == 0 or hostname.find("c") == 0:
-                args.append("-i")
-        if self.item and self.item != "all":
+        if self.item and self.item != 'all':
             # Add range
             start = end = self.item
-            if -1 < self.item.find("-"):
-                parts = self.item.split("-")
+            if -1 < self.item.find('-'):
+                parts = self.item.split('-')
                 start = parts[0]
                 end = parts[1]
-            args.extend(["-F", "%s-%s" % (start, end)])
+            args.extend(['-F', '%s-%s' % (start, end)])
 
-        input_path = self.normalize_path(self.data["compute"]["input"])
+        input_path = self.normalize_path(self.data['compute']['input'])
         args.extend([input_path])
         # Find out preffered nuke version from script, expect:
         #   #! C:/Program Files/Nuke10.0v6/nuke-10.0.6.dll -nx
         #   version 10.0 v6
         #   define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
         preferred_nuke_version = None
-        with open(input_path, "r") as f_input:
+        with open(input_path, 'r') as f_input:
             for line in f_input:
-                if line.startswith("version "):
+                if line.startswith('version '):
                     #  version 10.0 v6
-                    preferred_nuke_version = line[8:].replace(' ', '')
+                    preferred_nuke_version = line[8:].replace(' ', '').strip()
                     Common.info('Parsed Nuke version: "%s"' % preferred_nuke_version)
+                    break
 
         if Common.is_lin():
-            retval = [self.get_executable(preferred_nuke_version=preferred_nuke_version)]
+            retval = ['/bin/bash', '-c', self.get_executable(preferred_nuke_version=preferred_nuke_version)]
             retval.extend(args)
             return retval
         elif Common.is_mac():
@@ -231,12 +222,12 @@ class App(Common):
             retval.extend(args)
             return retval
 
-        raise Exception('This OS is not recognized by this Accsyn app!')
+        raise Exception('This OS is not recognized by this accsyn app!')
 
     def process_output(self, stdout, stderr):
         '''
         Sift through stdout/stderr and take action, return exitcode instead of None if should
-         abort
+         abort.
         '''
         sys.stdout.flush()
 
@@ -270,15 +261,15 @@ class App(Common):
             thread.start()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     App.version()
-    if "--help" in sys.argv:
+    if '--help' in sys.argv:
         App.usage()
     else:
         # Common.set_debug(True)
         try:
             app = App(sys.argv)
-            if "--probe" in sys.argv:
+            if '--probe' in sys.argv:
                 app.probe()
             else:
                 app.load()  # Load data

@@ -59,7 +59,10 @@ class App(Common):
                 "suffix": "_${PROFILE_NAME}",
                 "extension": ".mp4"
             }
-        }
+        },
+        "type": "transcode",
+        "color": "8,139,9",
+        "vendor": "ffmpeg.org"
     }
 
     PARAMETERS = {"arguments": "-y -i ${INPUT} ${PROFILE} ${OUTPUT}", "profile": "h264", "input_conversion": "never"}

@@ -55,6 +55,8 @@ class App(Common):
         "default_bucketsize": 1,
         "filename_extensions": ".ma,.mb",
         "binary_filename_extensions": ".mb",
+        "color": "50,77,165",
+        "vendor": "Chaos Group"
     }
 
     PARAMETERS = {"project": "", "arguments": "-r vray", "input_conversion": "always"}

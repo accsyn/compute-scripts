@@ -72,7 +72,10 @@ class App(Common):
                 "http_public": 41080,
                 "turn_public": 19303
             }
-        }
+        },
+        "type": "stream",
+        "color": "71,187,226",
+        "vendor": "Epic Games"
     }
 
     PARAMETERS = {"arguments": "-RenderOffscreen", "input_conversion": "never"}

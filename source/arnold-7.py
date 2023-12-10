@@ -43,6 +43,8 @@ class App(Common):
         "max_bucketsize": 1,
         "filename_extensions": ".ass",
         "output_readonly": True,
+        "color": "160,255,180",
+        "vendor": "Autodesk"
     }
 
     PARAMETERS = {"arguments": "-dw -nstdin -v 2"}

@@ -54,6 +54,8 @@ class App(Common):
         "default_bucketsize": 1,
         "filename_extensions": ".blend",
         "binary_filename_extensions": ".blend",
+        "color": "217,121,35",
+        "vendor": "blender.org"
     }
 
     PARAMETERS = {"arguments": "-b", "input_conversion": "always"}

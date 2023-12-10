@@ -42,6 +42,8 @@ class App(Common):
         "default_bucketsize": 1,
         "max_bucketsize": 1,
         "filename_extensions": ".ifd",
+        "color": "229,76,27",
+        "vendor": "SideFX Software"
     }
 
     PARAMETERS = {"arguments": "-V 2p"}

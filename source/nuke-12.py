@@ -61,6 +61,8 @@ class App(Common):
         "default_bucketsize": 5,
         "filename_extensions": ".nk",
         "binary_filename_extensions": "",
+        "color": "240,240,0",
+        "vendor": "The Foundry"
     }
 
     PARAMETERS = {"mapped_share_paths": [], "arguments": "-txV", "input_conversion": "auto"}
@@ -95,7 +97,7 @@ class App(Common):
         Common.info('')
         Common.info('   Usage: python %s {--probe | <path_json_data>}' % (name))
         Common.info('')
-        Common.info('       --probe           Check app existance and version.')
+        Common.info('       --probe           Check app existence and version.')
         Common.info('')
         Common.info(
             '       <path_json_data>  Execute app on data provided in the JSON and'

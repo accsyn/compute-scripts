@@ -54,6 +54,8 @@ class App(Common):
         "default_bucketsize": 1,
         "filename_extensions": ".ma,.mb",
         "binary_filename_extensions": ".mb",
+        "color": "160,255,180",
+        "vendor": "Autodesk"
     }
 
     PARAMETERS = {"project": "", "arguments": "-r arnold -ai:lve 2 -ai:alf true", "input_conversion": "always"}
