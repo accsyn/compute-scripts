@@ -235,6 +235,10 @@ class App(Common):
 
             return NORMAL_PRIORITY_CLASS
 
+    def process_output(self, stdout, stderr):
+        # TODO: Parse progress and return
+        # {"p":24.41037257081048,"a":1.1420566468984208,"s":0.0,"c":1.3324628267027712,"download: ":true,"t":"0","e":"04m 38s","f":"A001_C011_09187Ia.mov","metrics":true,"tp":97}
+        pass
 
 if __name__ == "__main__":
     if "--help" in sys.argv:
