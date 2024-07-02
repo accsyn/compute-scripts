@@ -115,11 +115,6 @@ class App(Common):
         '''
         return p.replace('\\', '/')
 
-    def get_envs(self):
-        '''(Optional) Get dynamic environment variables'''
-        result = {}
-        return result
-
     def get_executable(self, preferred_nuke_version=None):
         '''(REQUIRED) Return path to executable as string'''
 
@@ -174,10 +169,15 @@ class App(Common):
         else:
             raise Exception('Nuke not supported on this platform!')
 
-    def get_commandline(self, item):
-        '''(REQUIRED) Return command line as a string array'''
+    def get_envs(self):
+        '''(Optional) Get dynamic environment variables'''
+        result = {}
+        return result
 
+    def get_commandline(self, item):
         args = []
+
+        '''(REQUIRED) Return command line as a string array'''
         if 'parameters' in self.get_compute():
             parameters = self.get_compute()['parameters']
 

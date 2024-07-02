@@ -142,7 +142,7 @@ class App(Common):
         input_path = self.get_input()
 
         if not os.path.exists(input_path):
-            Common.warning("Input media not found @ {}!".format(input_path))
+            Common.log("[WARNING] Input media not found @ {}!".format(input_path))
 
         arguments = arguments.replace("${INPUT}", input_path.replace(" ", "%20")) # Preserve whitespace
 
@@ -162,7 +162,7 @@ class App(Common):
             profile_data = profiles[profile]
             profile_arguments = profile_data["arguments"]
         else:
-            Common.warning("Not profile specified, no transcoding will be done!")
+            Common.log("[WARNING] No profile specified, no transcoding will be done!")
 
         arguments = arguments.replace("${PROFILE}", Common.build_arguments(profile_arguments, escaped_quotes=False))
 
@@ -176,11 +176,11 @@ class App(Common):
             output_path = self.normalize_path(self.get_compute()["output"])
         else:
             if profile_data and 'default_output' in profile_data:
-                Common.info("No output path defined, falling back on default output: {}".format(
+                Common.log("No output path defined, falling back on default output: {}".format(
                     profile_data['default_output']))
                 output_path = self.normalize_path(profile_data['default_output'])
             else:
-                Common.warning("No output path defined, will output to same folder as input.")
+                Common.log("[WARNING] No output path defined, will output to same folder as input.")
                 output_path = os.path.dirname(input_path)
 
         extension = ""
@@ -188,11 +188,11 @@ class App(Common):
             extension = profile_data["extension"]
 
         if not os.path.exists(output_path):
-            Common.warning("Output media path not found @ {}, creating".format(output_path))
+            Common.log("[WARNING] Output media path not found @ {}, creating".format(output_path))
             os.makedirs(output_path)
         elif output_path == os.path.dirname(input_path) and suffix == "":
             suffix = "_transcoded"
-            Common.warning("Output path is same as input path, appending '_transcoded' suffix to prevent overwrite of "
+            Common.log("[WARNING] Output path is same as input path, appending '_transcoded' suffix to prevent overwrite of "
                            "input media!")
 
         filename_output = os.path.basename(input_path)
@@ -205,7 +205,7 @@ class App(Common):
 
         args.extend(Common.build_arguments(arguments, join=False))
 
-        print("Transcoding '{}' => '{}' using ffmpeg profile {}, arguments: {}".format(
+        Common.log("Transcoding '{}' => '{}' using ffmpeg profile {}, arguments: {}".format(
             input_path, output_path, profile, profile_arguments))
 
         if Common.is_lin():
@@ -253,6 +253,7 @@ if __name__ == "__main__":
                 app.load()  # Load data
                 app.execute()  # Run
         except:
-            App.warning(traceback.format_exc())
+            print(traceback.format_exc())
             App.usage()
+            time.sleep(2)
             sys.exit(1)

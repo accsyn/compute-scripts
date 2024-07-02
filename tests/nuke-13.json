@@ -1,0 +1,20 @@
+{
+    "code": "test_mac_v001_hn.nk render",
+    "input": "/Volumes/projects/nuke/vfx/test_mac_v001_hn.nk",
+    "parameters": {
+        "input_conversion": "always",
+        "arguments": "-txV",
+        "clear_output_directory": "true"
+    },
+    "app": "nuke-13",
+    "range": "1-100",
+    "dependencies": [
+        "/Volumes/projects/nuke/src/downhill"
+    ],
+    "filters": "site:hq+linux",
+    "output": "/Volumes/projects/nuke/output/test_v001",
+    "settings": {
+        "task_bucketsize": 5,
+        "transfer_speedlimit": -1.0
+    }
+}

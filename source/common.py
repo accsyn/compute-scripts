@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r39; [Henrik Norin, 24.07.02] Support JSON decode of data.
         * v1r38; [Henrik Norin, 23.11.20] Prevent crash on non encodeable stdout/stderr. Support for escaping backlash in
         arguments using %5C syntax, %20 to whitespace. Support variable substitution.
         * v1r37; [Henrik Norin, 23.10.31] Support arguments both as string and list type.
@@ -52,6 +53,7 @@ import random
 import datetime
 import shutil
 import signal
+import re
 
 if sys.version_info[0] < 3:
     import unicodedata
@@ -60,7 +62,7 @@ logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, d
 
 
 class Common(object):
-    __revision__ = 37  # Will be automatically increased each publish.
+    __revision__ = 39  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -225,24 +227,30 @@ class Common(object):
 
     @staticmethod
     def info(s):
+        ''' Log to service log'''
         logging.info("[ACCSYN] {0}".format(s))
         sys.stdout.flush()
 
     @staticmethod
     def warning(s):
-        logging.warning("[ACCSYN] {0}".format(s))
+        ''' Warn to service log'''
+        logging.warning(f"[ACCSYN] {0}".format(s))
         sys.stdout.flush()
         sys.stderr.flush()
+
+    @staticmethod
+    def log(s):
+        '''Log to public log'''
+        print("!{0}".format(s))
+        sys.stdout.flush()
 
     # PATH CONVERSION
 
     def get_mapped_share_path(self, share_code_or_id):
         self.debug("get_mapped_share_path({0})".format(share_code_or_id))
         if "config" not in self.data["client"]:
-            self.debug("@@@ No config in client!")
             return None
         if "sharepaths" not in self.data["client"]["config"]:
-            self.debug("@@@ No sharepaths in client config!")
             return None
         for entry in self.data["client"]["config"]["sharepaths"]:
             if entry["share"] == share_code_or_id or entry.get("share_hr") == share_code_or_id:
@@ -268,12 +276,12 @@ class Common(object):
                 p_rel = None
                 if -1 < idx_slash:
                     share_code = p[:idx_slash].split("=")[-1]
-                    p_rel = p[idx_slash + 1 :]
+                    p_rel = p[idx_slash + 1:]
                 else:
                     share_code = p.split("=")[-1]
                 # Check if re-mapped locally
                 prefix_to = self.get_mapped_share_path(share_code)
-                # Should be provided so we can convert to root share relative patj
+                # Should be provided so we can convert to root share relative path
                 if prefix_to is None and "share_paths" in self.get_compute()["parameters"]:
                     if share_code in self.get_compute()["parameters"]["share_paths"]:
                         d = self.get_compute()["parameters"]["share_paths"][share_code]
@@ -308,7 +316,7 @@ class Common(object):
                                 prefix_from = prefix
                     if prefix_to:
                         if not prefix_from:
-                            # Starts with accsyn share notiation?
+                            # Starts with accsyn share notation?
                             s = "share={0}".format(share["code"])
                             if p.startswith(s):
                                 prefix_from = s
@@ -369,11 +377,10 @@ class Common(object):
                     "No conversion of path '{0}' needed (prefix_from: "
                     "{1}, prefix_to: {2})".format(p_orig, prefix_from, prefix_to)
                 )
-
         except:
             Common.warning(
                 "Cannot normalize path, data '{0}' has wrong format?"
-                "Details: {1}".format(json.dumps(self.data, indent=2), traceback.format_exc())
+                "Details: {1}".format(json.dumps(self.data, indent=3, cls=JSONEncoder), traceback.format_exc())
             )
 
         if p.startswith("share="):
@@ -505,11 +512,11 @@ class Common(object):
 
     def get_executable(self):
         '''(REQUIRED) Return path to executable as string'''
-        raise Exception("Get executable not overridden by app!")
+        raise NotImplementedError("Get executable not overridden by app!")
 
     def get_commandline(self, item):
         '''(REQUIRED) Return command line as a string array'''
-        raise Exception("Get commandline not overridden by app!")
+        raise NotImplementedError("Get commandline not overridden by app!")
 
     def get_stdin(self, item):
         '''(OPTIONAL) Return stdin as text to be sent to app.'''
@@ -537,7 +544,7 @@ class Common(object):
             self.path_data
         ), "Data not found or is directory @ '{0}'!".format(self.path_data)
         try:
-            self.data = json.load(open(self.path_data, "r"))
+            self.data = json.load(open(self.path_data, "r"), cls=JSONDecoder)
         except:
             Common.warning(
                 "Loading the execution data caused exception {0}: {1}".format(
@@ -545,7 +552,7 @@ class Common(object):
                 )
             )
             raise
-        self.debug("Data loaded:\n{0}".format(json.dumps(self.data, indent=3)))
+        self.debug("Data loaded:\n{0}".format(json.dumps(self.data, indent=3, cls=JSONEncoder)))
 
     def take_lock(self, base_path, operation):
         '''Return True if we can take a lock on a file operation.'''
@@ -1010,7 +1017,7 @@ class Common(object):
                                 if not os.path.exists(p_output):
                                     os.makedirs(p_output)
                                 with open(p_metadata, "w") as f:
-                                    f.write(json.dumps(job_data, indent=4))
+                                    f.write(json.dumps(job_data, indent=3, cls=JSONEncoder))
             else:
                 self.info("No output clear directive passed!")
 
@@ -1047,7 +1054,7 @@ class Common(object):
 
         -r arnold -rl %22layer1 layer2%22 -v
 
-        %5C is also substituted with backlash (\) and #20 is substituted with space ( )
+        %5C is also substituted with backlash (\\) and #20 is substituted with space ( )
 
         '''
         if arguments is None:
@@ -1139,7 +1146,7 @@ class Common(object):
         return result
 
     def execute(self):
-        '''Compute'''
+        '''Run computation/render'''
         self.prepare()
         self.pre()
         exitcode = -1
@@ -1161,6 +1168,8 @@ class Common(object):
             self.post(exitcode)
 
     def _execute(self, item, additional_envs=None):
+        '''Internal execution function, can be overridden in case engine script does its own execution handling instead of
+        calling a subprocess.'''
         commands = self.get_commandline(item)
         if commands is None or len(commands) == 0:
             raise Exception("Empty command line!")
@@ -1248,7 +1257,7 @@ class Common(object):
                 # Read data waiting for us in pipes
                 stdout = Common.safely_printable(self.process.stdout.readline())
                 try:
-                    print("!{}".format(stdout), end="")
+                    Common.log("{}".format(stdout), end="")
                     sys.stdout.flush()
 
                     process_result = self.process_output(stdout, "")
@@ -1291,3 +1300,46 @@ class Common(object):
 
     def get_allowed_exitcodes(self):
         return [0]
+
+
+class JSONEncoder(json.JSONEncoder):
+    @staticmethod
+    def encode_accsyn_json(obj):
+        if isinstance(obj, datetime.date) or isinstance(obj, datetime.datetime):
+            # Make UTC ISO E8601DTw.d: 2008-09-15T15:53:00
+            return obj.strftime("%Y-%m-%dT%H:%M:%S")
+        elif isinstance(obj, bytes):
+            return obj.decode('utf-8')
+
+    def default(self, obj):
+        result = self.encode_accsyn_json(obj)
+        if result:
+            return result
+        return super(JSONEncoder, self).default(obj)
+
+class JSONDecoder(json.JSONDecoder):
+    def decode(self, json_string):
+        json_data = json.loads(json_string)
+
+        def recursive_decode(d):
+            if isinstance(d, dict):
+                for key in list(d.keys()):
+                    if isinstance(d[key], dict):
+                        d[key] = recursive_decode(d[key])
+                    elif isinstance(d[key], list):
+                        newlist = []
+                        for i in d[key]:
+                            newlist.append(recursive_decode(i))
+                        d[key] = newlist
+                    elif isinstance(d[key], str):
+                        if re.match(
+                            r"^\d{2,4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,6}$",
+                            str(d[key]),
+                        ):  # Date with millis: 2024-07-22T12:22:18.527675
+                            if len(d[key].split("-")[0]) == 4:
+                                d[key] = datetime.datetime.strptime(d[key], "%Y-%m-%dT%H:%M:%S.%f")
+                            else:
+                                d[key] = datetime.datetime.strptime(d[key], "%y-%m-%dT%H:%M:%S.%f")
+            return d
+
+        return recursive_decode(json_data)
