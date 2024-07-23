@@ -44,7 +44,7 @@ from __future__ import print_function
 import os
 import sys
 import json
-import logging
+#import logging
 import subprocess
 import traceback
 import socket
@@ -58,7 +58,14 @@ import re
 if sys.version_info[0] < 3:
     import unicodedata
 
-logging.basicConfig(format="(%(asctime)-15s) %(message)s", level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S")
+#logging.basicConfig(
+#    format="(%(asctime)-15s) %(message)s",
+#    level=logging.INFO,
+#    datefmt="%Y-%m-%d %H:%M:%S",
+#    handlers=[
+#        logging.StreamHandler()  # Add a StreamHandler to output logs to the terminal
+#    ]
+#)
 
 
 class Common(object):
@@ -225,23 +232,23 @@ class Common(object):
                 "ascii", errors="ignore"
             )
 
+
+    @staticmethod
+    def log(s):
+        '''Log to public log'''
+        print(f"!{s}")
+        sys.stdout.flush()
+
     @staticmethod
     def info(s):
         ''' Log to service log'''
-        logging.info("[ACCSYN] {0}".format(s))
+        print(f"[INFO] {s}")
         sys.stdout.flush()
 
     @staticmethod
     def warning(s):
         ''' Warn to service log'''
-        logging.warning(f"[ACCSYN] {0}".format(s))
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-    @staticmethod
-    def log(s):
-        '''Log to public log'''
-        print("!{0}".format(s))
+        print(f"[WARNING] [ACCSYN] {s}")
         sys.stdout.flush()
 
     # PATH CONVERSION
@@ -421,7 +428,8 @@ class Common(object):
 
     def debug(self, s):
         if self.is_debug():
-            logging.info("<<ACCSYN APP DEBUG>> {0}".format(s))
+            print("<<ACCSYN APP DEBUG>> {0}".format(s))
+            sys.stdout.flush()
 
     @staticmethod
     def set_debug(debug):
@@ -493,8 +501,8 @@ class Common(object):
                     if line != line_orig:
                         self.info("(input convert) '{0}'>'{1}'".format(line_orig, line))
             except:
-                logging.warning(traceback.format_exc())
-                logging.warning("Could not convert line #{0}, leaving as is...".format(line_no))
+                Common.warning(traceback.format_exc())
+                Common.warning("Could not convert line #{0}, leaving as is...".format(line_no))
             f_dst.write("{0}".format(line))
             line_no += 1
 

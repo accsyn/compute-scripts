@@ -1,12 +1,13 @@
 '''
 
-    annex media export accsyn compute engine script.
+    allente/annex media export accsyn compute engine script.
 
     Exports input media to output folder, with dependencies,  defined by the Annex media export format
 
     Changelog:
 
-        * v1r1; (Henrik, 24.01.28) Initial version
+        * v1r2; (Henrik, 24.07.13) Initial version
+        * v1r1; (Henrik, 24.06.22) Initial version
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -187,7 +188,7 @@ class App(Common):
             raise Exception("No media output provided!")
         output_path = self.get_compute()["output"]
 
-        Common.log(f"Exporting title {title['name']}, media {self.get_input()} for customer '{customer}' using Annex exporter > {output_path}...")
+        Common.log(f"Exporting title {title['name']}, media {self.get_input()} for customer '{customer}' using Allente exporter > {output_path}...")
 
         # Create package/customer definition
         metadata = ET.SubElement(root, 'Metadata')
@@ -296,49 +297,71 @@ class App(Common):
             region_code_short = region['region']['short'].upper()
 
             Common.log(f"Processing region {region_code} content...")
+
+            if region.get('subtitles'):
+                subtitles_path = self.fetch_path_from_deps(region['subtitles']['path'])
+                if not subtitles_path:
+                    Common.warning("Subtitles media dependency not provided!")
+                elif not os.path.exists(subtitles_path):
+                    Common.warning(f"Subtitles media dependency not found @ {subtitles_path}!")
+                else:
+                    subtitles_output_path = os.path.join(output_path, f"{title['code']}_{region_code}{os.path.splitext(subtitles_path)[1]}")
+                    checksum = App.copy_and_checksum(subtitles_path, subtitles_output_path)
+                    App.add_media_asset(root, "subtitle", "movie", os.path.basename(subtitles_output_path), checksum, Language=region_code)
+            else:
+                Common.warning("No subtitles provided for region")
+
             if region.get('trailer_subtitles'):
                 trailer_subtitles_path = self.fetch_path_from_deps(region['trailer_subtitles']['path'])
                 if not trailer_subtitles_path:
-                    raise Exception("Trailer subtitles media dependency not provided!")
-                if not os.path.exists(trailer_subtitles_path):
-                    raise Exception(f"Trailer subtitles media dependency not found @ {trailer_subtitles_path}!")
-
-                trailer_subtitles_output_path = os.path.join(output_path, f"{title['code']}_preview_{region_code}{os.path.splitext(trailer_subtitles_path)[1]}")
-                checksum = App.copy_and_checksum(trailer_subtitles_path, trailer_subtitles_output_path)
-                App.add_media_asset(root, "subtitle", "preview", os.path.basename(trailer_subtitles_output_path), checksum, Language=region_code)
+                    Common.warning("Trailer subtitles media dependency not provided!")
+                elif not os.path.exists(trailer_subtitles_path):
+                    Common.warning(f"Trailer subtitles media dependency not found @ {trailer_subtitles_path}!")
+                else:
+                    trailer_subtitles_output_path = os.path.join(output_path, f"{title['code']}_preview_{region_code}{os.path.splitext(trailer_subtitles_path)[1]}")
+                    checksum = App.copy_and_checksum(trailer_subtitles_path, trailer_subtitles_output_path)
+                    App.add_media_asset(root, "subtitle", "preview", os.path.basename(trailer_subtitles_output_path), checksum, Language=region_code)
+            else:
+                Common.warning("No trailer subtitles provided for region")
 
             if region.get('poster_portrait'):
                 poster_portrait_path = self.fetch_path_from_deps(region['poster_portrait']['path'])
                 if not poster_portrait_path:
-                    raise Exception("Portrait poster media dependency not provided!")
-                if not os.path.exists(poster_portrait_path):
-                    raise Exception(f"Portrait poster media dependency not found @ {poster_portrait_path}!")
-
-                poster_portrait_output_path = os.path.join(output_path, f"{title['code']}_movport_{region_code}{os.path.splitext(poster_portrait_path)[1]}")
-                checksum = App.copy_and_checksum(poster_portrait_path, poster_portrait_output_path)
-                App.add_media_asset(root, "poster", "DTH_MOVIE_PORTRAIT", os.path.basename(poster_portrait_output_path), checksum, Language=region_code)
+                    Common.warning("Portrait poster media dependency not provided!")
+                elif not os.path.exists(poster_portrait_path):
+                    Common.warning(f"Portrait poster media dependency not found @ {poster_portrait_path}!")
+                else:
+                    poster_portrait_output_path = os.path.join(output_path, f"{title['code']}_movport_{region_code}{os.path.splitext(poster_portrait_path)[1]}")
+                    checksum = App.copy_and_checksum(poster_portrait_path, poster_portrait_output_path)
+                    App.add_media_asset(root, "poster", "DTH_MOVIE_PORTRAIT", os.path.basename(poster_portrait_output_path), checksum, Language=region_code)
+            else:
+                Common.warning("No portrait poster provided for region")
 
             if region.get('poster_landscape'):
                 poster_landscape_path = self.fetch_path_from_deps(region['poster_landscape']['path'])
                 if not poster_landscape_path:
-                    raise Exception("Landscape poster media dependency not provided!")
-                if not os.path.exists(poster_landscape_path):
-                    raise Exception(f"Landscape poster media dependency not found @ {poster_landscape_path}!")
-
-                poster_landscape_output_path = os.path.join(output_path, f"{title['code']}_movland_{region_code}{os.path.splitext(poster_landscape_path)[1]}")
-                checksum = App.copy_and_checksum(poster_landscape_path, poster_landscape_output_path)
-                App.add_media_asset(root, "poster", "DTH_MOVIE_LANDSCAPE", os.path.basename(poster_landscape_output_path), checksum, Language=region_code)
+                    Common.warning("Landscape poster media dependency not provided!")
+                elif not os.path.exists(poster_landscape_path):
+                    Common.warning(f"Landscape poster media dependency not found @ {poster_landscape_path}!")
+                else:
+                    poster_landscape_output_path = os.path.join(output_path, f"{title['code']}_movland_{region_code}{os.path.splitext(poster_landscape_path)[1]}")
+                    checksum = App.copy_and_checksum(poster_landscape_path, poster_landscape_output_path)
+                    App.add_media_asset(root, "poster", "DTH_MOVIE_LANDSCAPE", os.path.basename(poster_landscape_output_path), checksum, Language=region_code)
+            else:
+                Common.warning("No landscape poster provided for region")
 
             if region.get('poster_shot'):
                 poster_shot_path = self.fetch_path_from_deps(region['poster_shot']['path'])
                 if not poster_shot_path:
-                    raise Exception("Shot poster media dependency not provided!")
-                if not os.path.exists(poster_shot_path):
-                    raise Exception(f"Shot poster media dependency not found @ {poster_shot_path}!")
-
-                poster_shot_output_path = os.path.join(output_path, f"{title['code']}_movshot_{region_code}{os.path.splitext(poster_shot_path)[1]}")
-                checksum = App.copy_and_checksum(poster_shot_path, poster_shot_output_path)
-                App.add_media_asset(root, "poster", "DTH_MOVIE_SHOT", os.path.basename(poster_shot_output_path), checksum, Language=region_code)
+                    Common.warning("Shot poster media dependency not provided!")
+                elif not os.path.exists(poster_shot_path):
+                    Common.warning(f"Shot poster media dependency not found @ {poster_shot_path}!")
+                else:
+                    poster_shot_output_path = os.path.join(output_path, f"{title['code']}_movshot_{region_code}{os.path.splitext(poster_shot_path)[1]}")
+                    checksum = App.copy_and_checksum(poster_shot_path, poster_shot_output_path)
+                    App.add_media_asset(root, "poster", "DTH_MOVIE_SHOT", os.path.basename(poster_shot_output_path), checksum, Language=region_code)
+            else:
+                Common.warning("No shot poster provided for region")
 
         # Write the XML to file
         xml_output_path = os.path.join(output_path, f"{title['code']}_metadata.xml")
@@ -348,7 +371,7 @@ class App(Common):
         ET.indent(tree, space="\t", level=0)
         tree.write(xml_output_path, method='xml', encoding='utf-8', xml_declaration=True)
 
-        Common.log("Annex/Canal Digital export done!")
+        Common.log("Allente/Canal Digital export done!")
 
 
 if __name__ == "__main__":
