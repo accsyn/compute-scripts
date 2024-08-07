@@ -1,13 +1,14 @@
-''' 
+""" 
 
-    Nuke v12 accsyn compute app script.
+    Nuke v12 accsyn compute engine script.
 
     Finds and executes Nuke by building a commandline out of 'item'(frame number)
     and parameters provided.
 
     Changelog:
 
-        * v1r5; (Henrik Norin, 22.11.11) Report progress frame number/uri within a bucket. Url encoded arguments support.
+        * v1r5; (Henrik Norin, 22.11.11) Report progress frame number/uri within a bucket. Url encoded arguments
+        support.
         * v1r4; Python 3 compliance. Convert windows paths to Nuke (/) during input file conversion.
         * v1r3; Code style
         * v1r2; Parse Nuke output and finish render if hangs 5s on "Total render time:"
@@ -18,11 +19,10 @@
 
     Author: Henrik Norin, HDR AB
 
-'''
+"""
 
 import os
 import sys
-import logging
 import traceback
 import socket
 import datetime
@@ -35,25 +35,25 @@ try:
     from common import Common
 except ImportError as e:
     sys.stderr.write(
-        'Cannot import accsyn common app (required), '
+        'Cannot import accsyn common engine (required), '
         'make sure to name it "common.py" add its parent directory to '
-        ' PYTHONPATH. Details: %s\n' % e
+        ' PYTHONPATH. Details: {}\n'.format(e)
     )
     raise
 
 
-class App(Common):
+class Engine(Common):
     __revision__ = 5  # Will be automatically increased each publish
 
-    # App configuration
+    # Engine configuration
     #
     # IMPORTANT NOTE:
-    #   This section defines app behaviour and should not be refactored or moved away from the
+    #   This section defines engine behaviour and should not be refactored or moved away from the
     # enclosing START/END markers. Read into memory by backend at start and publish. See Common.py
     # for setting and parameter descriptions.
     #
 
-    # -- APP CONFIG START --
+    # -- ENGINE CONFIG START --
 
     SETTINGS = {
         "items": True,
@@ -67,65 +67,65 @@ class App(Common):
 
     PARAMETERS = {"mapped_share_paths": [], "arguments": "-txV", "input_conversion": "auto"}
 
-    # -- APP CONFIG END --
+    # -- ENGINE CONFIG END --
 
     NUKE_VERSION = '12'
 
     def __init__(self, argv):
-        super(App, self).__init__(argv)
+        super(Engine, self).__init__(argv)
         self.date_finish_expire = None
 
     @staticmethod
     def get_path_version_name():
         p = os.path.realpath(__file__)
         parent = os.path.dirname(p)
-        return (os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0])
+        return os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0]
 
     @staticmethod
     def version():
         (unused_cp, cv, cn) = Common.get_path_version_name()
-        (unused_p, v, n) = App.get_path_version_name()
+        (unused_p, v, n) = Engine.get_path_version_name()
         Common.info(
-            '   accsyn compute app "{}" v{}-{}(common: v{}-{}) '.format(
-                n, v, App.__revision__, cv, Common.__revision__
+            '   accsyn compute engine "{}" v{}-{}(common: v{}-{}) '.format(
+                n, v, Engine.__revision__, cv, Common.__revision__
             )
         )
 
     @staticmethod
     def usage():
-        (unused_p, unused_v, name) = App.get_path_version_name()
+        (unused_p, unused_v, name) = Engine.get_path_version_name()
         Common.info('')
-        Common.info('   Usage: python %s {--probe | <path_json_data>}' % (name))
+        Common.info('   Usage: python %s {--probe | <path_json_data>}' % name)
         Common.info('')
         Common.info('       --probe           Check app existence and version.')
         Common.info('')
         Common.info(
-            '       <path_json_data>  Execute app on data provided in the JSON and'
+            '       <path_json_data>  Execute engine on data provided in the JSON and'
             ' ACCSYN_xxx environment variables.'
         )
         Common.info('')
 
     def probe(self):
-        '''(Optional) Do nothing if found, raise exception otherwise.'''
+        """(Optional) Do nothing if found, raise exception otherwise."""
         exe = self.get_executable()
         assert os.path.exists(exe), "'{}' does not exist!".format(exe)
         # Check if correct version here
         return True
 
     def convert_path(self, p, envs=None):
-        '''
+        """
         (Override) Called with translated path, during input conversion, before written to file.
         Suitable for turning Windows backslashes to forward slashes with Nuke.
-        '''
+        """
         return p.replace('\\', '/')
 
     def get_envs(self):
-        '''(Optional) Get dynamic environment variables'''
+        """(Optional) Get dynamic environment variables"""
         result = {}
         return result
 
     def get_executable(self, preferred_nuke_version=None):
-        '''(REQUIRED) Return path to executable as string'''
+        """(REQUIRED) Return path to executable as string"""
 
         def find_executable(p_base, prefix):
             if os.path.exists(p_base):
@@ -138,14 +138,14 @@ class App(Common):
                         dirname = preferred_nuke_version
                     else:
                         dirname = sorted(candidates)[-1]
-                    p_app = os.path.join(p_base, dirname)
+                    p_app_dir = os.path.join(p_base, dirname)
                     p_executable_rel = None
                     # Find executable
                     if Common.is_mac():
                         p_executable_rel = os.path.join('{0}.app'.format(dirname), 'Contents', 'MacOS')
-                        p_search_executable = os.path.join(p_app, p_executable_rel)
+                        p_search_executable = os.path.join(p_app_dir, p_executable_rel)
                     else:
-                        p_search_executable = p_app
+                        p_search_executable = p_app_dir
                     for fn in os.listdir(p_search_executable):
                         if fn.lower().startswith(prefix.lower()):
                             if Common.is_win() and not fn.lower().endswith('.exe'):
@@ -154,32 +154,32 @@ class App(Common):
                                 '{0}{1}'.format(p_executable_rel, os.sep) if p_executable_rel else ""
                             ) + fn
                             break
-                    return p_app, p_executable_rel
+                    return p_app_dir, p_executable_rel
                 else:
                     raise Exception('No {0} application version found on system!'.format(prefix))
             else:
                 raise Exception('Application base directory "{0}" not found on system!'.format(p_base))
 
         # Use highest version
-        p_base = p_app = None
+        p_os_apps = p_app = None
         if Common.is_lin():
-            p_base = '/usr/local'
+            p_os_apps = '/usr/local'
         elif Common.is_mac():
-            p_base = '/Applications'
+            p_os_apps = '/Applications'
         elif Common.is_win():
-            p_base = 'C:\\Program Files'
-        p_executable_rel = None
-        if p_base:
-            p_app, p_executable_rel = find_executable(p_base, 'Nuke{0}'.format(App.NUKE_VERSION))
-        if p_executable_rel is None:
+            p_os_apps = 'C:\\Program Files'
+        p_executable_relative = None
+        if p_os_apps:
+            p_app, p_executable_relative = find_executable(p_os_apps, 'Nuke{0}'.format(Engine.NUKE_VERSION))
+        if p_executable_relative is None:
             raise Exception('Nuke executable not found, looked in {0}!'.format(p_app))
         if p_app:
-            return os.path.join(p_app, p_executable_rel)
+            return os.path.join(p_app, p_executable_relative)
         else:
             raise Exception('Nuke not supported on this platform!')
 
     def get_commandline(self, item):
-        '''(REQUIRED) Return command line as a string array'''
+        """(REQUIRED) Return command line as a string array"""
 
         args = []
         if 'parameters' in self.get_compute():
@@ -231,13 +231,13 @@ class App(Common):
             retval.extend(args)
             return retval
 
-        raise Exception('This OS is not recognized by this accsyn app!')
+        raise Exception('This OS is not recognized by this accsyn engine!')
 
     def process_output(self, stdout, stderr):
-        '''
+        """
         Sift through stdout/stderr and take action, return exitcode instead of None if should
          abort
-        '''
+        """
         sys.stdout.flush()
 
         sys.stdout.flush()
@@ -247,7 +247,7 @@ class App(Common):
             if idx == -1:
                 stdout.rfind('\\')
             if 1 < idx:
-                frame_number = Common.parse_number(stdout[idx : stdout.rfind('took')])
+                frame_number = Common.parse_number(stdout[idx: stdout.rfind('took')])
                 if frame_number is not None:
                     self.task_started(frame_number)
 
@@ -256,7 +256,7 @@ class App(Common):
                 time.sleep(1.0)
                 if (
                     self.executing
-                    and not self.date_finish_expire is None
+                    and self.date_finish_expire
                     and self.date_finish_expire < datetime.datetime.now()
                 ):
                     Common.warning('Nuke finished but still running (hung?), finishing up.')
@@ -264,7 +264,7 @@ class App(Common):
                     self.kill()
                     break  # We are done
 
-        ''' Nuke might stuck on finished render, handle this. '''
+        """ Nuke might stuck on finished render, handle this. """
         if -1 < (stdout + stderr).find('Total render time:'):
             Common.info('Finished Nuke render will expire in 5s...')
             self.date_finish_expire = datetime.datetime.now() + datetime.timedelta(seconds=5)
@@ -273,19 +273,19 @@ class App(Common):
 
 
 if __name__ == '__main__':
-    App.version()
+    Engine.version()
     if '--help' in sys.argv:
-        App.usage()
+        Engine.usage()
     else:
         # Common.set_debug(True)
         try:
-            app = App(sys.argv)
+            engine = Engine(sys.argv)
             if '--probe' in sys.argv:
-                app.probe()
+                engine.probe()
             else:
-                app.load()  # Load data
-                app.execute()  # Run
+                engine.load()  # Load data
+                engine.execute()  # Run
         except:
-            App.warning(traceback.format_exc())
-            App.usage()
+            Engine.warning(traceback.format_exc())
+            Engine.usage()
             sys.exit(1)

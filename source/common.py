@@ -1,4 +1,4 @@
-'''
+"""
     accsyn Common compute app
 
     Inherited by all other apps.
@@ -39,7 +39,7 @@
 
     Author: Henrik Norin, HDR AB
 
-'''
+"""
 from __future__ import print_function
 import os
 import sys
@@ -81,11 +81,11 @@ class Common(object):
     _dev = False
     _debug = False
 
-    # App configuration
+    # Engine configuration
     # IMPORTANT NOTE:
-    # This section defines app behaviour and should not be refactored or moved
+    # This section defines engine behaviour and should not be refactored or moved
     # away from the enclosing START/END markers.
-    # -- APP CONFIG START --
+    # -- ENGINE CONFIG START --
 
     # SETTINGS
     # Can be retrieved during execution from: self.get_compute()["settings"]
@@ -117,7 +117,7 @@ class Common(object):
     #  {"remote":"D:\\PROJECTS\\MYSHARE",
     # "global":"share=root_share_id/share_path"}, used during input file parsing.
 
-    # -- APP CONFIG END --
+    # -- ENGINE CONFIG END --
 
     def __init__(self, argv):
         # Expect path to data in argv
@@ -151,7 +151,7 @@ class Common(object):
     def get_path_version_name():
         p = os.path.realpath(__file__)
         parent = os.path.dirname(p)
-        return (os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0])
+        return os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0]
 
     # Helpers
 
@@ -159,7 +159,7 @@ class Common(object):
         return self.data.get("compute", {})
 
     def get_site_code(self):
-        '''Return the name site we are running at'''
+        """Return the name site we are running at"""
         if not self.data.get("site") is None:
             return self.data["site"].get("code")
         return None
@@ -178,10 +178,6 @@ class Common(object):
                 return Common.OS_RSB
         elif os.name == "nt":
             return Common.OS_WINDOWS
-
-    @staticmethod
-    def is_lin():
-        return Common.get_os() == Common.OS_LINUX
 
     @staticmethod
     def is_lin():
@@ -234,21 +230,28 @@ class Common(object):
 
 
     @staticmethod
-    def log(s):
-        '''Log to public log'''
-        print(f"!{s}")
+    def log(s, end=None):
+        """Log to public log"""
+        if end:
+            try:
+                print("!{}".format(s), end=end)
+            except:
+                # Python2 syntax
+                sys.stdout.write("!{}".format(s))
+        else:
+            print("!{}".format(s))
         sys.stdout.flush()
 
     @staticmethod
     def info(s):
-        ''' Log to service log'''
-        print(f"[INFO] {s}")
+        """ Log to service log"""
+        print("[INFO] {}".format(s))
         sys.stdout.flush()
 
     @staticmethod
     def warning(s):
-        ''' Warn to service log'''
-        print(f"[WARNING] [ACCSYN] {s}")
+        """ Warn to service log"""
+        print("[WARNING] [ACCSYN] {}".format(s))
         sys.stdout.flush()
 
     # PATH CONVERSION
@@ -267,8 +270,8 @@ class Common(object):
                 return entry["path"]
 
     def normalize_path(self, p, mkdirs=False):
-        '''Based on share mappings supplied, convert a foreign path to local
-        platform'''
+        """Based on share mappings supplied, convert a foreign path to local
+        platform"""
         self.debug("normalize_path({0},{1})".format(p, mkdirs))
         if p is None or 0 == len(p):
             return p
@@ -438,17 +441,17 @@ class Common(object):
     # Functions that should be overridden by child class ######################
 
     def get_envs(self):
-        '''(OPTIONAL) Return dict holding additional environment variables.'''
+        """(OPTIONAL) Return dict holding additional environment variables."""
         return {}
 
     def probe(self):
-        '''(OPTIONAL) Return False if not implemented, return True if found,
-        raise exception otherwise.'''
+        """(OPTIONAL) Return False if not implemented, return True if found,
+        raise exception otherwise."""
         return False
 
     def check_mounts(self):
-        '''(OPTIONAL) Make sure all network drives are available prior to
-        compute.'''
+        """(OPTIONAL) Make sure all network drives are available prior to
+        compute."""
         pass
 
     @staticmethod
@@ -467,8 +470,8 @@ class Common(object):
             return p2
 
     def convert_input(self, f_src, f_dst, conversions):
-        '''Basic ASCII file path conversion, should be overridden by app to
-        support custom conversions. Raise an exception is localization fails.'''
+        """Basic ASCII file path conversion, should be overridden by engine to
+        support custom conversions. Raise an exception is localization fails."""
         line_no = 1
         # Collect envs
         envs = self.get_common_envs()
@@ -507,7 +510,7 @@ class Common(object):
             line_no += 1
 
     def convert_path(self, p, envs=None):
-        '''Can be overridden by app to provide further path alignment.'''
+        """Can be overridden by engine to provide further path alignment."""
         if envs:
             # Replace ${ENV} occurrences in path
             for key, value in list(envs.items()):
@@ -519,35 +522,35 @@ class Common(object):
         return p
 
     def get_executable(self):
-        '''(REQUIRED) Return path to executable as string'''
-        raise NotImplementedError("Get executable not overridden by app!")
+        """(REQUIRED) Return path to executable as string"""
+        raise NotImplementedError("Get executable not overridden by engine!")
 
     def get_commandline(self, item):
-        '''(REQUIRED) Return command line as a string array'''
-        raise NotImplementedError("Get commandline not overridden by app!")
+        """(REQUIRED) Return command line as a string array"""
+        raise NotImplementedError("Get commandline not overridden by engine!")
 
     def get_stdin(self, item):
-        '''(OPTIONAL) Return stdin as text to be sent to app.'''
+        """(OPTIONAL) Return stdin as text to be sent to engine."""
         return None
 
     def get_creation_flags(self, item):
-        '''(OPTIONAL) Return the process creation flags.'''
+        """(OPTIONAL) Return the process creation flags."""
         return None
 
     def process_output(self, stdout, stderr):
-        '''
+        """
         (OPTIONAL) Sift through stdout/stderr and take action.
 
         Return value:
            None (default); Do nothing, keep execution going.
            integer; Terminate process and force exit code to this value.
-        '''
+        """
         return None
 
     ###########################################################################
 
     def load(self):
-        '''Load the data from disk, must be run BEFORE execution'''
+        """Load the data from disk, must be run BEFORE execution"""
         assert os.path.exists(self.path_data) or os.path.isdir(
             self.path_data
         ), "Data not found or is directory @ '{0}'!".format(self.path_data)
@@ -563,7 +566,7 @@ class Common(object):
         self.debug("Data loaded:\n{0}".format(json.dumps(self.data, indent=3, cls=JSONEncoder)))
 
     def take_lock(self, base_path, operation):
-        '''Return True if we can take a lock on a file operation.'''
+        """Return True if we can take a lock on a file operation."""
         other_is_localizing = False
         hostname = socket.gethostname()
         lock_path = os.path.join(
@@ -624,38 +627,38 @@ class Common(object):
         return False, lock_path
 
     def get_input(self):
-        ''' Return the input file, single entry or based on item/other parameter. Can be overridden by app as needed'''
+        """ Return the input file, single entry or based on item/other parameter. Can be overridden by engine as needed"""
         if "input" in self.get_compute():
-            input = self.get_compute()["input"]
+            p_input = self.get_compute()["input"]
 
-            if not isinstance(input, list):
-                return input
+            if not isinstance(p_input, list):
+                return p_input
             else:
                 if not self.item:
-                    raise Exception("No item (input file # to process) for app")
+                    raise Exception("No item (input file # to process) for engine")
                 index = int(self.item)
-                if index < 0 or index >= len(input):
+                if index < 0 or index >= len(p_input):
                     raise Exception("Item/file #{} not found among inputs".format(self.item))
-                return input[index]
+                return p_input[index]
 
         return None
 
     def set_input(self, value):
-        ''' Set the input file, single entry or based on item/other parameter. Can be overridden by app as needed'''
+        """ Set the input file, single entry or based on item/other parameter. Can be overridden by engine as needed"""
 
         input = self.get_compute()["input"]
         if not isinstance(input, list):
             self.get_compute()["input"] = value
         else:
             if not self.item:
-                raise Exception("No item (input file # to process) for app")
+                raise Exception("No item (input file # to process) for engine")
             index = int(self.item)
             if index < 0 or index >= len(input):
                 raise Exception("Item/file #{} not found among inputs".format(self.item))
             input[index] = value
 
     def prepare(self):
-        '''Prepare execution - localize files.'''
+        """Prepare execution - localize files."""
         # Any input file?
         p_input = self.get_input()
         if p_input:
@@ -1030,11 +1033,11 @@ class Common(object):
                 self.info("No output clear directive passed!")
 
     def pre(self):
-        '''Pre execution, to be overridden'''
+        """Pre execution, to be overridden"""
         pass
 
     def post(self, exitcode):
-        '''Post execution, to be overridden.'''
+        """Post execution, to be overridden."""
         pass
 
     def get_common_envs(self):
@@ -1054,7 +1057,7 @@ class Common(object):
 
     @staticmethod
     def build_arguments(arguments, escaped_quotes=True, join=True):
-        '''
+        """
         Convert arguments, if *escaped_quotes* is true url encoded quotes is
         supported in *arguments* to allow whitespace in arguments, using %22 notatation.
 
@@ -1064,7 +1067,7 @@ class Common(object):
 
         %5C is also substituted with backlash (\\) and #20 is substituted with space ( )
 
-        '''
+        """
         if arguments is None:
             return []
         if not isinstance(arguments, list):
@@ -1089,7 +1092,7 @@ class Common(object):
 
     @staticmethod
     def substitute(s, mapping):
-        ''' Substitute ${KEY} with VALUE for items in *mapping* + environment variables.'''
+        """ Substitute ${KEY} with VALUE for items in *mapping* + environment variables."""
         if not mapping:
             mapping = {}
         mapping.update(os.environ.items())
@@ -1111,7 +1114,7 @@ class Common(object):
         print("os.system('WMIC PROCESS WHERE processid={0} CALL Terminate')".format(pid))
 
     def kill(self):
-        '''Kill the current running PID'''
+        """Kill the current running PID"""
         if not self.executing or self.process is None:
             Common.warning("Refusing terminate - not running or have no process info!")
             return
@@ -1124,7 +1127,7 @@ class Common(object):
             # os.system('kill -9 {0}'.format(self.process.pid))
 
     def task_started(self, uri):
-        '''A task has been started within a bucket'''
+        """A task has been started within a bucket"""
         self.info("Task started: {}".format(uri))
         if not self._current_task is None and self._current_task != uri:
             # Current task is done
@@ -1133,10 +1136,10 @@ class Common(object):
 
     @staticmethod
     def parse_number(fragment):
-        '''Try to get last number from a string fragment, for example:
+        """Try to get last number from a string fragment, for example:
 
         /pat_sc045_2165_lighting_v0003_Canyon.1009.exr'
-        '''
+        """
         result = -1
         number = None
         try:
@@ -1154,7 +1157,7 @@ class Common(object):
         return result
 
     def execute(self):
-        '''Run computation/render'''
+        """Run computation/render"""
         self.prepare()
         self.pre()
         exitcode = -1
@@ -1162,13 +1165,13 @@ class Common(object):
             if "max_bucketsize" in self.SETTINGS and self.SETTINGS["max_bucketsize"] == 1 and self.item.find("-") > 0:
                 Common.info("Renderer can only execute one item at a time.")
                 # Render a batch of items, one by one
-                FIRST = int(self.item.split("-")[0])
-                LAST = int(self.item.split("-")[-1])
-                for item in range(FIRST, LAST + 1):
+                first = int(self.item.split("-")[0])
+                last = int(self.item.split("-")[-1])
+                for item in range(first, last + 1):
                     # Tell accsyn previous task is done
                     self.task_started(str(item))
                     Common.info("*" * 100)
-                    Common.info("Batch executing item {} of [{}-{}]".format(item, FIRST, LAST))
+                    Common.info("Batch executing item {} of [{}-{}]".format(item, first, last))
                     exitcode = self._execute(item, additional_envs={"ACCSYN_ITEM": str(item)})
             else:
                 exitcode = self._execute(self.item)
@@ -1176,8 +1179,8 @@ class Common(object):
             self.post(exitcode)
 
     def _execute(self, item, additional_envs=None):
-        '''Internal execution function, can be overridden in case engine script does its own execution handling instead of
-        calling a subprocess.'''
+        """Internal execution function, can be overridden in case engine script does its own execution handling instead of
+        calling a subprocess."""
         commands = self.get_commandline(item)
         if commands is None or len(commands) == 0:
             raise Exception("Empty command line!")

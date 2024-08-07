@@ -1,8 +1,8 @@
-'''
+"""
 
     allente/annex media export accsyn compute engine script.
 
-    Exports input media to output folder, with dependencies,  defined by the Annex media export format
+    Exports input media to output folder, with dependencies, defined by the Allente/Annex media export format
 
     Changelog:
 
@@ -14,7 +14,7 @@
 
     Author: Henrik Norin, HDR AB
 
-'''
+"""
 import subprocess
 import os
 import sys
@@ -29,23 +29,23 @@ try:
     from common import Common
 except ImportError as e:
     sys.stderr.write(
-        'Cannot import accsyn common app (required), '
+        'Cannot import accsyn common engine (required), '
         'make sure to name it "common.py" add its parent directory to '
-        ' PYTHONPATH. Details: %s\n' % e
+        ' PYTHONPATH. Details: {}\n'.format(e)
     )
     sys.stderr.write('[DEBUG] Sys path: {}'.format(sys.path))
     raise
 
 
-class App(Common):
+class Engine(Common):
     __revision__ = 1  # Increment this after each update
 
-    # App configuration
+    # Engine configuration
     # IMPORTANT NOTE:
-    #   This section defines app behaviour and should not be refactored or moved
+    #   This section defines engine behaviour and should not be refactored or moved
     #   away from the enclosing START/END markers. Read into memory by backend at
-    #   launch and publish of new app.
-    # -- APP CONFIG START --
+    #   launch and publish of new engine.
+    # -- ENGINE CONFIG START --
 
     SETTINGS = {
         "items": False,
@@ -64,10 +64,10 @@ class App(Common):
 
     ENVS = {}
 
-    # -- APP CONFIG END --
+    # -- ENGINE CONFIG END --
 
     def __init__(self, argv):
-        super(App, self).__init__(argv)
+        super(Engine, self).__init__(argv)
 
     @staticmethod
     def get_path_version_name():
@@ -78,17 +78,17 @@ class App(Common):
     @staticmethod
     def usage():
         (unused_cp, cv, cn) = Common.get_path_version_name()
-        (unused_p, v, n) = App.get_path_version_name()
+        (unused_p, v, n) = Engine.get_path_version_name()
         Common.info(
-            '   accsyn compute app "%s" v%s-%s(common: v%s-%s) ' % (n, v, App.__revision__, cv, Common.__revision__)
+            '   accsyn compute engine "{}" v{}-{}(common: v{}-{}) '.format(n, v, Engine.__revision__, cv, Common.__revision__)
         )
         Common.info('')
         Common.info('   Usage: python %s {--probe|<path_json_data>}' % n)
         Common.info('')
-        Common.info('       --probe           Have app check if it is found and' ' of correct version.')
+        Common.info('       --probe           Have engine check if it is found and' ' of correct version.')
         Common.info('')
         Common.info(
-            '       <path_json_data>  Execute app on data provided in '
+            '       <path_json_data>  Execute engine on data provided in '
             'the JSON and ACCSYN_xxx environment variables.'
         )
         Common.info('')
@@ -107,7 +107,7 @@ class App(Common):
 
     @staticmethod
     def format_date(date):
-        ''' Return date string on Zulu format'''
+        """ Return date string on Zulu format"""
         return date.strftime('%Y-%m-%dT%H:%M:%SZ')
 
     @staticmethod
@@ -154,10 +154,10 @@ class App(Common):
         metadata = ET.SubElement(asset, 'Metadata')
         ams = ET.SubElement(metadata, 'AMS')
         ams.set('Asset_Class', asset_class)
-        App.add_app_data(metadata, Name="Type", App="MOD", Value=asset_type)
-        App.add_app_data(metadata, Name="Content_CheckSum", App="MOD", Value=checksum)
+        Engine.add_app_data(metadata, Name="Type", App="MOD", Value=asset_type)
+        Engine.add_app_data(metadata, Name="Content_CheckSum", App="MOD", Value=checksum)
         for key in kwargs:
-            App.add_app_data(metadata, App="MOD", Name=key, Value=kwargs[key])
+            Engine.add_app_data(metadata, App="MOD", Name=key, Value=kwargs[key])
 
         content = ET.SubElement(metadata, 'Content')
         content.set("Value", asset_name)
@@ -168,7 +168,7 @@ class App(Common):
         root = ET.Element('ADI')
 
         if "parameters" not in self.get_compute():
-            raise Exception("No parameters for app")
+            raise Exception("No parameters for engine")
 
         parameters = self.get_compute()["parameters"]
 
@@ -219,66 +219,66 @@ class App(Common):
         ams = ET.SubElement(metadata, 'AMS')
         ams.set('Asset_Class', 'title')
 
-        App.add_app_data(metadata, Name="Audience", Value=title.get('audience', "General"))
-        App.add_app_data(metadata, Name="NO_Authority_ID", Value="123456")
+        Engine.add_app_data(metadata, Name="Audience", Value=title.get('audience', "General"))
+        Engine.add_app_data(metadata, Name="NO_Authority_ID", Value="123456")
         if title.get('imdb', ""):
-            App.add_app_data(metadata, Name="IMDb_ID", Value=title['imdb'])
-        App.add_app_data(metadata, Name="Title", Value=title['name'], Language="eng")
+            Engine.add_app_data(metadata, Name="IMDb_ID", Value=title['imdb'])
+        Engine.add_app_data(metadata, Name="Title", Value=title['name'], Language="eng")
         if title.get('short_summary', ""):
-            App.add_app_data(metadata, Name="Summary_Short", Value=title['short_summary'], Language="eng")
+            Engine.add_app_data(metadata, Name="Summary_Short", Value=title['short_summary'], Language="eng")
         if title.get('long_summary', ""):
-            App.add_app_data(metadata, Name="Summary_Long", Value=title['long_summary'], Language="eng")
+            Engine.add_app_data(metadata, Name="Summary_Long", Value=title['long_summary'], Language="eng")
         if title.get('directors', ""):
             for director in title['directors'].split("\n"):
-                App.add_app_data(metadata, Name="Director", Value=director)
+                Engine.add_app_data(metadata, Name="Director", Value=director)
         if title.get('actors', ""):
             for actor in title['actors'].split("\n"):
-                App.add_app_data(metadata, Name="Actors", Value=actor)
+                Engine.add_app_data(metadata, Name="Actors", Value=actor)
 
         country = "en"
         if title.get('country', {}):
             country = title['country']['short']
-        App.add_app_data(metadata, Name="Country_of_Origin", Value=App.align_country(country))
+        Engine.add_app_data(metadata, Name="Country_of_Origin", Value=Engine.align_country(country))
         if title.get('year', ""):
-            App.add_app_data(metadata, Name="Year", Value=title['year'])
+            Engine.add_app_data(metadata, Name="Year", Value=title['year'])
         if title.get('run_time', ""):
-            App.add_app_data(metadata, Name="Run_Time", Value=title['run_time'])
+            Engine.add_app_data(metadata, Name="Run_Time", Value=title['run_time'])
         if title.get('rating', ""):
-            App.add_app_data(metadata, Name="Rating", Value=title['rating'], Region="UK")
+            Engine.add_app_data(metadata, Name="Rating", Value=title['rating'], Region="UK")
         if title.get('genre', ""):
-            App.add_app_data(metadata, Name="Genre", Value=title['genre'])
+            Engine.add_app_data(metadata, Name="Genre", Value=title['genre'])
         if title.get('keywords', ""):
             for keyword in title['keywords'].split("\n"):
-                App.add_app_data(metadata, Name="Keyword", Value=keyword)
+                Engine.add_app_data(metadata, Name="Keyword", Value=keyword)
 
         # Provide region specific title metadata
         for region in parameters.get("regions", []):
             region_code = region['region']['value'].lower()
             region_code_short = region['region']['short'].upper()
             if region.get('title', ""):
-                App.add_app_data(metadata, Name="Title", Value=region['title'], Language=region_code)
+                Engine.add_app_data(metadata, Name="Title", Value=region['title'], Language=region_code)
             if region.get('short_summary', ""):
-                App.add_app_data(metadata, Name="Summary_Short", Value=region['short_summary'], Language=region_code)
+                Engine.add_app_data(metadata, Name="Summary_Short", Value=region['short_summary'], Language=region_code)
             if region.get('long_summary', ""):
-                App.add_app_data(metadata, Name="Summary_Long", Value=region['long_summary'], Language=region_code)
+                Engine.add_app_data(metadata, Name="Summary_Long", Value=region['long_summary'], Language=region_code)
             if region.get('rating', ""):
-                App.add_app_data(metadata, Name="Rating", Value=region['rating'], Region=region_code_short)
+                Engine.add_app_data(metadata, Name="Rating", Value=region['rating'], Region=region_code_short)
             if region.get('lic_start', ""):
-                App.add_app_data(metadata, Name="Licensing_Window_Start", Value=App.format_date(region['lic_start']), Region=region_code_short)
+                Engine.add_app_data(metadata, Name="Licensing_Window_Start", Value=Engine.format_date(region['lic_start']), Region=region_code_short)
             if region.get('lic_end', ""):
-                App.add_app_data(metadata, Name="Licensing_Window_End", Value=App.format_date(region['lic_end']), Region=region_code_short)
+                Engine.add_app_data(metadata, Name="Licensing_Window_End", Value=Engine.format_date(region['lic_end']), Region=region_code_short)
             if region.get('est_lic_start', ""):
-                App.add_app_data(metadata, Name="EST_Licensing_Window_Start", Value=App.format_date(region['lic_start']), Region=region_code_short)
+                Engine.add_app_data(metadata, Name="EST_Licensing_Window_Start", Value=Engine.format_date(region['lic_start']), Region=region_code_short)
             if region.get('est_lic_end', ""):
-                App.add_app_data(metadata, Name="EST_Licensing_Window_End", Value=App.format_date(region['lic_end']), Region=region_code_short)
+                Engine.add_app_data(metadata, Name="EST_Licensing_Window_End", Value=Engine.format_date(region['lic_end']), Region=region_code_short)
             if region.get('price', ""):
-                App.add_app_data(metadata, Name="EST_Suggested_Price", Value=region['price'], Region=region_code_short)
+                Engine.add_app_data(metadata, Name="EST_Suggested_Price", Value=region['price'], Region=region_code_short)
 
         # Copy and checksum main media
 
         media_output_path = os.path.join(output_path, f"{title['code']}_movie{os.path.splitext(input_path)[1]}")
-        checksum = App.copy_and_checksum(input_path, media_output_path)
-        App.add_media_asset(root, "movie", "movie", os.path.basename(media_output_path), checksum)
+        checksum = Engine.copy_and_checksum(input_path, media_output_path)
+        Engine.add_media_asset(root, "movie", "movie", os.path.basename(media_output_path), checksum)
 
         if parameters.get('trailer'):
             trailer_path = self.fetch_path_from_deps(parameters['trailer']['path'])
@@ -288,8 +288,8 @@ class App(Common):
                 raise Exception(f"Trailer media dependency not found @ {trailer_path}!")
 
             trailer_output_path = os.path.join(output_path, f"{title['code']}_preview{os.path.splitext(trailer_path)[1]}")
-            checksum = App.copy_and_checksum(trailer_path, trailer_output_path)
-            App.add_media_asset(root, "preview", "preview", os.path.basename(trailer_output_path), checksum)
+            checksum = Engine.copy_and_checksum(trailer_path, trailer_output_path)
+            Engine.add_media_asset(root, "preview", "preview", os.path.basename(trailer_output_path), checksum)
 
         # Provide region specific content
         for region in parameters.get("regions", []):
@@ -306,8 +306,8 @@ class App(Common):
                     Common.warning(f"Subtitles media dependency not found @ {subtitles_path}!")
                 else:
                     subtitles_output_path = os.path.join(output_path, f"{title['code']}_{region_code}{os.path.splitext(subtitles_path)[1]}")
-                    checksum = App.copy_and_checksum(subtitles_path, subtitles_output_path)
-                    App.add_media_asset(root, "subtitle", "movie", os.path.basename(subtitles_output_path), checksum, Language=region_code)
+                    checksum = Engine.copy_and_checksum(subtitles_path, subtitles_output_path)
+                    Engine.add_media_asset(root, "subtitle", "movie", os.path.basename(subtitles_output_path), checksum, Language=region_code)
             else:
                 Common.warning("No subtitles provided for region")
 
@@ -319,8 +319,8 @@ class App(Common):
                     Common.warning(f"Trailer subtitles media dependency not found @ {trailer_subtitles_path}!")
                 else:
                     trailer_subtitles_output_path = os.path.join(output_path, f"{title['code']}_preview_{region_code}{os.path.splitext(trailer_subtitles_path)[1]}")
-                    checksum = App.copy_and_checksum(trailer_subtitles_path, trailer_subtitles_output_path)
-                    App.add_media_asset(root, "subtitle", "preview", os.path.basename(trailer_subtitles_output_path), checksum, Language=region_code)
+                    checksum = Engine.copy_and_checksum(trailer_subtitles_path, trailer_subtitles_output_path)
+                    Engine.add_media_asset(root, "subtitle", "preview", os.path.basename(trailer_subtitles_output_path), checksum, Language=region_code)
             else:
                 Common.warning("No trailer subtitles provided for region")
 
@@ -332,8 +332,8 @@ class App(Common):
                     Common.warning(f"Portrait poster media dependency not found @ {poster_portrait_path}!")
                 else:
                     poster_portrait_output_path = os.path.join(output_path, f"{title['code']}_movport_{region_code}{os.path.splitext(poster_portrait_path)[1]}")
-                    checksum = App.copy_and_checksum(poster_portrait_path, poster_portrait_output_path)
-                    App.add_media_asset(root, "poster", "DTH_MOVIE_PORTRAIT", os.path.basename(poster_portrait_output_path), checksum, Language=region_code)
+                    checksum = Engine.copy_and_checksum(poster_portrait_path, poster_portrait_output_path)
+                    Engine.add_media_asset(root, "poster", "DTH_MOVIE_PORTRAIT", os.path.basename(poster_portrait_output_path), checksum, Language=region_code)
             else:
                 Common.warning("No portrait poster provided for region")
 
@@ -345,8 +345,8 @@ class App(Common):
                     Common.warning(f"Landscape poster media dependency not found @ {poster_landscape_path}!")
                 else:
                     poster_landscape_output_path = os.path.join(output_path, f"{title['code']}_movland_{region_code}{os.path.splitext(poster_landscape_path)[1]}")
-                    checksum = App.copy_and_checksum(poster_landscape_path, poster_landscape_output_path)
-                    App.add_media_asset(root, "poster", "DTH_MOVIE_LANDSCAPE", os.path.basename(poster_landscape_output_path), checksum, Language=region_code)
+                    checksum = Engine.copy_and_checksum(poster_landscape_path, poster_landscape_output_path)
+                    Engine.add_media_asset(root, "poster", "DTH_MOVIE_LANDSCAPE", os.path.basename(poster_landscape_output_path), checksum, Language=region_code)
             else:
                 Common.warning("No landscape poster provided for region")
 
@@ -358,8 +358,8 @@ class App(Common):
                     Common.warning(f"Shot poster media dependency not found @ {poster_shot_path}!")
                 else:
                     poster_shot_output_path = os.path.join(output_path, f"{title['code']}_movshot_{region_code}{os.path.splitext(poster_shot_path)[1]}")
-                    checksum = App.copy_and_checksum(poster_shot_path, poster_shot_output_path)
-                    App.add_media_asset(root, "poster", "DTH_MOVIE_SHOT", os.path.basename(poster_shot_output_path), checksum, Language=region_code)
+                    checksum = Engine.copy_and_checksum(poster_shot_path, poster_shot_output_path)
+                    Engine.add_media_asset(root, "poster", "DTH_MOVIE_SHOT", os.path.basename(poster_shot_output_path), checksum, Language=region_code)
             else:
                 Common.warning("No shot poster provided for region")
 
@@ -376,18 +376,18 @@ class App(Common):
 
 if __name__ == "__main__":
     if "--help" in sys.argv:
-        App.usage()
+        Engine.usage()
     else:
         # Common.set_debug(True)
         try:
-            app = App(sys.argv)
+            engine = Engine(sys.argv)
             if "--probe" in sys.argv:
-                app.probe()
+                engine.probe()
             else:
-                app.load()  # Load data
-                app.execute()  # Run
+                engine.load()  # Load data
+                engine.execute()  # Run
         except:
             print(traceback.format_exc())
-            App.usage()
+            Engine.usage()
             time.sleep(2)
             sys.exit(1)

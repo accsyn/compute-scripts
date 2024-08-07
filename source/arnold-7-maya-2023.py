@@ -1,6 +1,6 @@
-'''
+"""
 
-    Arnold for Maya accsyn compute app script.
+    Arnold for Maya accsyn compute engine script.
 
     Finds and executes app by building a commandline out of 'item'(frame number)
     and parameters provided.
@@ -15,15 +15,11 @@
 
     Author: Henrik Norin, HDR AB
 
-'''
+"""
 
 import os
 import sys
-import logging
 import traceback
-import json
-import time
-import datetime
 
 try:
     if 'ACCSYN_COMPUTE_COMMON_PATH' in os.environ:
@@ -31,22 +27,22 @@ try:
     from common import Common
 except ImportError as e:
     sys.stderr.write(
-        'Cannot import accsyn common app (required), '
+        'Cannot import accsyn common engine (required), '
         'make sure to name it "common.py" add its parent directory to '
-        ' PYTHONPATH. Details: %s\n' % e
+        ' PYTHONPATH. Details: {}\n'.format(e)
     )
     raise
 
 
-class App(Common):
+class Engine(Common):
     __revision__ = 2  # Increment this after each update
 
-    # App configuration
+    # Engine configuration
     # IMPORTANT NOTE:
-    # This section defines app behaviour and should not be refactored or moved
+    # This section defines engine behaviour and should not be refactored or moved
     # away from the enclosing START/END markers. Read into memory by backend at
     # start and publish.
-    # -- APP CONFIG START --
+    # -- ENGINE CONFIG START --
 
     SETTINGS = {
         "items": True,
@@ -64,44 +60,45 @@ class App(Common):
 
     ARNOLD_VERSION = "7.1.0.0"
 
-    # -- APP CONFIG END --
+    # -- ENGINE CONFIG END --
 
     def __init__(self, argv):
-        super(App, self).__init__(argv)
+        super(Engine, self).__init__(argv)
 
     @staticmethod
     def get_path_version_name():
         p = os.path.realpath(__file__)
         parent = os.path.dirname(p)
-        return (os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0])
+        return os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0]
 
     @staticmethod
     def usage():
         (unused_cp, cv, cn) = Common.get_path_version_name()
-        (unused_p, v, n) = App.get_path_version_name()
+        (unused_p, v, n) = Engine.get_path_version_name()
         Common.info(
-            '   accsyn compute app "%s" v%s-%s(common: v%s-%s) ' % (n, v, App.__revision__, cv, Common.__revision__)
+            '   accsyn compute engine "{}" v{}-{}(common: v{}-{}) '.format(n, v, Engine.__revision__, cv,
+                                                                           Common.__revision__)
         )
         Common.info('')
         Common.info('   Usage: python %s {--probe|<path_json_data>}' % n)
         Common.info('')
-        Common.info('       --probe           Have app check if it is found and' ' of correct version.')
+        Common.info('       --probe           Have engine check if it is found and' ' of correct version.')
         Common.info('')
         Common.info(
-            '       <path_json_data>  Execute app on data provided in '
+            '       <path_json_data>  Execute engine on data provided in '
             'the JSON and ACCSYN_xxx environment variables.'
         )
         Common.info('')
 
     def probe(self):
-        '''(Optional) Do nothing if found, raise exception otherwise.'''
+        """(Optional) Do nothing if found, raise exception otherwise."""
         exe = self.get_executable()
         assert os.path.exists(exe), "'{}' does not exist!".format(exe)
         # TODO, check if correct version
         return True
 
     def get_executable(self):
-        '''(REQUIRED) Return path to executable as string'''
+        """(REQUIRED) Return path to executable as string"""
         if Common.is_lin():
             return "/usr/autodesk/maya2023/bin/Render"
         elif Common.is_mac():
@@ -110,12 +107,12 @@ class App(Common):
             return "C:\\Program Files\\Autodesk\\Maya2023\\bin\\Render.exe"
 
     def get_envs(self):
-        '''Return site specific envs here'''
+        """Return site specific envs here"""
         result = {}
         return result
 
     def get_commandline(self, item):
-        '''(REQUIRED) Return command line as a string array'''
+        """(REQUIRED) Return command line as a string array"""
         args = []
         if "parameters" in self.get_compute():
             parameters = self.get_compute()["parameters"]
@@ -152,10 +149,10 @@ class App(Common):
             retval.extend(args)
             return retval
 
-        raise Exception('This operating system is not recognized by this accsyn' ' app!')
+        raise Exception('This operating system is not recognized by this accsyn engine!')
 
     def get_creation_flags(self, item):
-        '''Always run on low priority on windows'''
+        """Always run on low priority on windows"""
         if Common.is_win():
             ABOVE_NORMAL_PRIORITY_CLASS = 0x00008000
             BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
@@ -167,7 +164,7 @@ class App(Common):
             return NORMAL_PRIORITY_CLASS
 
     def process_output(self, stdout, stderr):
-        '''(Override)
+        """(Override)
 
                 Arnold example progress output:
 
@@ -196,7 +193,7 @@ class App(Common):
         00:21:54 49262MB         |  render done in 6:59.988
         00:21:54 49262MB         |  [driver_exr] writing file `J:/pat/sc045/2165/lighting/render/pat_sc045_2165_lighting_v0001/pat_sc045_2165_lighting_v0003/pat_sc045_2165_lighting_v0003/Canyon/pat_sc045_2165_lighting_v0003_Canyon.1009.exr'
 
-        '''
+        """
         if -1 < stdout.find('[driver_') and -1 < stdout.find('writing file'):
             # Find out which frame number
             idx = stdout.rfind('/')
@@ -205,22 +202,22 @@ class App(Common):
             if 1 < idx:
                 frame_number = Common.parse_number(stdout[idx:])
                 if frame_number is not None:
-                    Common.task_started(frame_number)
+                    self.task_started(frame_number)
 
 
 if __name__ == "__main__":
     if "--help" in sys.argv:
-        App.usage()
+        Engine.usage()
     else:
         # Common.set_debug(True)
         try:
-            app = App(sys.argv)
+            engine = Engine(sys.argv)
             if "--probe" in sys.argv:
-                app.probe()
+                engine.probe()
             else:
-                app.load()  # Load data
-                app.execute()  # Run
+                engine.load()  # Load data
+                engine.execute()  # Run
         except:
-            App.warning(traceback.format_exc())
-            App.usage()
+            Engine.warning(traceback.format_exc())
+            Engine.usage()
             sys.exit(1)

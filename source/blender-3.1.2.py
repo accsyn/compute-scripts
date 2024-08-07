@@ -1,6 +1,6 @@
-'''
+"""
 
-    Blender accsyn compute app script.
+    Blender accsyn compute engine script.
 
     Finds and executes app by building a commandline out of 'item'(frame number)
     and parameters provided.
@@ -15,15 +15,11 @@
 
     Author: Henrik Norin, HDR AB
 
-'''
+"""
 
 import os
 import sys
-import logging
 import traceback
-import json
-import time
-import datetime
 
 try:
     if 'ACCSYN_COMPUTE_COMMON_PATH' in os.environ:
@@ -31,22 +27,22 @@ try:
     from common import Common
 except ImportError as e:
     sys.stderr.write(
-        'Cannot import accsyn common app (required), '
+        'Cannot import accsyn common engine (required), '
         'make sure to name it "common.py" add its parent directory to '
-        ' PYTHONPATH. Details: %s\n' % e
+        ' PYTHONPATH. Details: {}\n'.format(e)
     )
     raise
 
 
-class App(Common):
+class Engine(Common):
     __revision__ = 1  # Increment this after each update
 
-    # App configuration
+    # Engine configuration
     # IMPORTANT NOTE:
-    # This section defines app behaviour and should not be refactored or moved
+    # This section defines engine behaviour and should not be refactored or moved
     # away from the enclosing START/END markers. Read into memory by backend at
     # start and publish.
-    # -- APP CONFIG START --
+    # -- ENGINE CONFIG START --
 
     SETTINGS = {
         "items": True,
@@ -62,7 +58,7 @@ class App(Common):
 
     ENVS = {}
 
-    # -- APP CONFIG END --
+    # -- ENGINE CONFIG END --
 
     # The installed Blender version
     BLENDER_VERSION = "3.1.2"
@@ -71,41 +67,42 @@ class App(Common):
     CHECK_BLENDER_VERSION = True
 
     def __init__(self, argv):
-        super(App, self).__init__(argv)
+        super(Engine, self).__init__(argv)
 
     @staticmethod
     def get_path_version_name():
         p = os.path.realpath(__file__)
         parent = os.path.dirname(p)
-        return (os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0])
+        return os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0]
 
     @staticmethod
     def usage():
         (unused_cp, cv, cn) = Common.get_path_version_name()
-        (unused_p, v, n) = App.get_path_version_name()
+        (unused_p, v, n) = Engine.get_path_version_name()
         Common.info(
-            '   accsyn compute app "%s" v%s-%s(common: v%s-%s) ' % (n, v, App.__revision__, cv, Common.__revision__)
+            '   accsyn compute engine "{}" v{}-{}(common: v{}-{}) '.format(n, v, Engine.__revision__, cv,
+                                                                           Common.__revision__)
         )
         Common.info('')
         Common.info('   Usage: python %s {--probe|<path_json_data>}' % n)
         Common.info('')
-        Common.info('       --probe           Have app check if it is found and' ' of correct version.')
+        Common.info('       --probe           Have engine check if it is found and' ' of correct version.')
         Common.info('')
         Common.info(
-            '       <path_json_data>  Execute app on data provided in '
+            '       <path_json_data>  Execute engine on data provided in '
             'the JSON and ACCSYN_xxx environment variables.'
         )
         Common.info('')
 
     def probe(self):
-        '''(Optional) Do nothing if found, raise exception otherwise.'''
+        """(Optional) Do nothing if found, raise exception otherwise."""
         exe = self.get_executable()
         assert os.path.exists(exe), "'{}' does not exist!".format(exe)
         # TODO, check if correct version
         return True
 
     def get_executable(self):
-        '''(REQUIRED) Return path to executable as string'''
+        """(REQUIRED) Return path to executable as string"""
         if Common.is_lin():
             return "/usr/local/blender/bin/Blender"
         elif Common.is_mac():
@@ -114,41 +111,41 @@ class App(Common):
             return "C:\\Program Files\\Blender Foundation\\Blender 3.1.2\\Blender.exe"
 
     def get_envs(self):
-        '''Return site specific envs here'''
+        """Return site specific envs here"""
         result = {}
         return result
 
     def get_commandline(self, item):
-        '''(REQUIRED) Return command line as a string array'''
+        """(REQUIRED) Return command line as a string array"""
         # Check if correct version of V-ray - verify size of main library
         path_executable = self.get_executable()
-        if App.CHECK_BLENDER_VERSION:
+        if Engine.CHECK_BLENDER_VERSION:
             if Common.is_lin():
                 if not os.path.exists(path_executable):
                     raise Exception(
                         "Blender {} not found or is not the correct installed version on this Linux station!".format(
-                            App.BLENDER_VERSION
+                            Engine.BLENDER_VERSION
                         )
                     )
             elif Common.is_mac():
                 path_info_plist = os.path.join(os.path.dirname(os.path.dirname(path_executable)), 'Info.plist')
                 Common.info(
-                    'Checking for Blender version string "{}" within {}'.format(App.BLENDER_VERSION, path_info_plist)
+                    'Checking for Blender version string "{}" within {}'.format(Engine.BLENDER_VERSION, path_info_plist)
                 )
                 if (
                     not os.path.exists(path_info_plist)
-                    or (open(path_info_plist, 'r').read()).find(App.BLENDER_VERSION) == -1
+                    or (open(path_info_plist, 'r').read()).find(Engine.BLENDER_VERSION) == -1
                 ):
                     raise Exception(
                         "Blender {} not found or is not the correct installed version on this Mac!".format(
-                            App.BLENDER_VERSION
+                            Engine.BLENDER_VERSION
                         )
                     )
             elif Common.is_win():
                 if not os.path.exists(path_executable):
                     raise Exception(
                         "Blender {} not found or is not the correct installed version on this PC!".format(
-                            App.BLENDER_VERSION
+                            Engine.BLENDER_VERSION
                         )
                     )
 
@@ -185,10 +182,10 @@ class App(Common):
             retval.extend(args)
             return retval
 
-        raise Exception('This operating system is not recognized by this accsyn' ' app!')
+        raise Exception('This operating system is not recognized by this accsyn engine!')
 
     def get_creation_flags(self, item):
-        '''Always run on low priority on windows'''
+        """Always run on low priority on windows"""
         if Common.is_win():
             ABOVE_NORMAL_PRIORITY_CLASS = 0x00008000
             BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
@@ -202,17 +199,17 @@ class App(Common):
 
 if __name__ == "__main__":
     if "--help" in sys.argv:
-        App.usage()
+        Engine.usage()
     else:
         # Common.set_debug(True)
         try:
-            app = App(sys.argv)
+            engine = Engine(sys.argv)
             if "--probe" in sys.argv:
-                app.probe()
+                engine.probe()
             else:
-                app.load()  # Load data
-                app.execute()  # Run
+                engine.load()  # Load data
+                engine.execute()  # Run
         except:
-            App.warning(traceback.format_exc())
-            App.usage()
+            Engine.warning(traceback.format_exc())
+            Engine.usage()
             sys.exit(1)

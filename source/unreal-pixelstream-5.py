@@ -1,6 +1,6 @@
-'''
+"""
 
-    Unreal PixelStream accsyn compute app script.
+    Unreal PixelStream accsyn compute engine script.
 
     Executes a pixel stream server instance based on the game exe provided, the computer and lane. Spawns
     an additional Signalling Web server, designed to be reachable over the WAN.
@@ -22,7 +22,7 @@
 
     Author: Henrik Norin, HDR AB
 
-'''
+"""
 
 import os
 import sys
@@ -39,22 +39,22 @@ try:
     from common import Common
 except ImportError as e:
     sys.stderr.write(
-        'Cannot import accsyn common app (required), '
+        'Cannot import accsyn common engine (required), '
         'make sure to name it "common.py" add its parent directory to '
-        ' PYTHONPATH. Details: %s\n' % e
+        ' PYTHONPATH. Details: {}\n'.format(e)
     )
     raise
 
 
-class App(Common):
+class Engine(Common):
     __revision__ = 5  # Increment this after each update
 
-    # App configuration
+    # Engine configuration
     # IMPORTANT NOTE:
-    # This section defines app behaviour and should not be refactored or moved
+    # This section defines engine behaviour and should not be refactored or moved
     # away from the enclosing START/END markers. Read into memory by backend at
     # start and publish.
-    # -- APP CONFIG START --
+    # -- ENGINE CONFIG START --
 
     SETTINGS = {
         "items": True,
@@ -82,12 +82,19 @@ class App(Common):
 
     ENVS = {}
 
-    # -- APP CONFIG END --
+    # -- ENGINE CONFIG END --
 
     INFRASTRUCTURE_PATH = os.path.join("C:\\", "ProgramData", "accsyn", "compute", "PixelStreamingInfrastructure")
 
     def __init__(self, argv):
-        super(App, self).__init__(argv)
+        super(Engine, self).__init__(argv)
+        self.p_script_base = None
+        self.p_script_common_dst = None
+        self.p_script_turn_dst = None
+        self.p_config_dst = None
+        self.p_script_dst = None
+        self.webserver_process = None
+        self.terminate_web_process = False
 
     @staticmethod
     def get_path_version_name():
@@ -98,30 +105,31 @@ class App(Common):
     @staticmethod
     def usage():
         (unused_cp, cv, cn) = Common.get_path_version_name()
-        (unused_p, v, n) = App.get_path_version_name()
+        (unused_p, v, n) = Engine.get_path_version_name()
         Common.info(
-            '   accsyn compute app "%s" v%s-%s(common: v%s-%s) ' % (n, v, App.__revision__, cv, Common.__revision__)
+            '   accsyn compute engine "{}" v{}-{}(common: v{}-{}) '.format(n, v, Engine.__revision__, cv,
+                                                                           Common.__revision__)
         )
         Common.info('')
         Common.info('   Usage: python %s {--probe|<path_json_data>}' % n)
         Common.info('')
-        Common.info('       --probe           Have app check if it is found and' ' of correct version.')
+        Common.info('       --probe           Have engine check if it is found and' ' of correct version.')
         Common.info('')
         Common.info(
-            '       <path_json_data>  Execute app on data provided in '
+            '       <path_json_data>  Execute engine on data provided in '
             'the JSON and ACCSYN_xxx environment variables.'
         )
         Common.info('')
 
     def probe(self):
-        '''(Optional) Do nothing if found, raise exeception otherwise.'''
+        """(Optional) Do nothing if found, raise exeception otherwise."""
         exe = self.get_executable()
         assert os.path.exists(exe), "'{}' does not exist!".format(exe)
         # TODO, check if correct version
         return True
 
     def get_executable(self):
-        '''(REQUIRED) Return path to executable as string'''
+        """(REQUIRED) Return path to executable as string"""
         if Common.is_lin():
             raise Exception("Unreal pixel stream only supported on Windows")
         elif Common.is_mac():
@@ -130,26 +138,26 @@ class App(Common):
             return self.normalize_path(self.get_compute()["input"])
 
     def get_envs(self):
-        '''Return site specific envs here'''
+        """Return site specific envs here"""
         result = {}
         return result
 
     def pre(self):
-        '''Spawn pixelstream web server, requires Git installed by this guide:
+        """Spawn pixelstream web server, requires Git installed by this guide:
 
         https://docs.unrealengine.com/5.2/en-US/getting-started-with-pixel-streaming-in-unreal-engine/
 
-        '''
+        """
 
         if "ACCSYN_LANE" not in os.environ:
             raise Exception(
                 'Need ACCSYN_LANE set in environment variables, make sure you are running accsyn app v2.5 or later'
             )
 
-        LANE_NUMBER = int(os.environ["ACCSYN_LANE"])
+        lane_number = int(os.environ["ACCSYN_LANE"])
 
         Common.info("Preparing web server infrastructure")
-        if not os.path.exists(App.INFRASTRUCTURE_PATH):
+        if not os.path.exists(Engine.INFRASTRUCTURE_PATH):
             Common.info("")
             Common.info(
                 "Refer to https://docs.unrealengine.com/5.2/en-US/"
@@ -163,20 +171,20 @@ class App(Common):
             Common.info("")
             raise Exception(
                 "Could not locate pixel stream infrastructure @ '{}', please git glone and setup it up.".format(
-                    App.INFRASTRUCTURE_PATH
+                    Engine.INFRASTRUCTURE_PATH
                 )
             )
 
-        self.p_script_base = os.path.join(App.INFRASTRUCTURE_PATH, "SignallingWebServer", "platform_scripts", "cmd")
+        self.p_script_base = os.path.join(Engine.INFRASTRUCTURE_PATH, "SignallingWebServer", "platform_scripts", "cmd")
 
         Common.info("Preparing config")
         hostname = socket.gethostname()
-        if hostname not in App.SETTINGS["ports"]:
+        if hostname not in Engine.SETTINGS["ports"]:
             raise Exception("This host({}) is not in app port settings!".format(hostname))
 
-        self.port_config = copy.deepcopy(App.SETTINGS['ports'][hostname])
+        self.port_config = copy.deepcopy(Engine.SETTINGS['ports'][hostname])
         for key, value in self.port_config.items():
-            self.port_config[key] = self.port_config[key] + LANE_NUMBER - 1
+            self.port_config[key] = self.port_config[key] + lane_number - 1
 
         Common.info("   Transposed port config: {}".format(self.port_config))
 
@@ -211,7 +219,7 @@ Write-Output "Additional accsyn PID($TurnPid) - TURN server"
                     f_dst.write("{}".format(line))
 
         # Config
-        p_config_src = os.path.join(App.INFRASTRUCTURE_PATH, "SignallingWebServer", "config.json")
+        p_config_src = os.path.join(Engine.INFRASTRUCTURE_PATH, "SignallingWebServer", "config.json")
         parts = os.path.splitext(p_config_src)
         self.p_config_dst = "{}-{}{}".format(parts[0], self.data['process']['id'], parts[1])
 
@@ -303,7 +311,7 @@ WHILE (get-process -ID $NodePid) {
                 for line in stdout.split("\n"):
                     if line.find("Public IP address") > -1:
                         # Expect: Public IP address : 207.189.207.12
-                        self.public_ip = line[line.find(":") + 1 :].replace("\n", "").strip()
+                        self.public_ip = line[line.find(":") + 1:].replace("\n", "").strip()
                         # Now we can update description on task
                         print(
                             """{"taskdescription":"http://%s:%s","uri":"%s"}"""
@@ -334,7 +342,8 @@ WHILE (get-process -ID $NodePid) {
                         else:
                             Common.warning(
                                 "NOT cleaning up Powershell temp scripts! (keeping: {}, {}, {}, {})".format(
-                                    self.p_script_common_dst, self.p_script_turn_dst, self.p_config_dst, self.p_script_dst))
+                                    self.p_script_common_dst, self.p_script_turn_dst, self.p_config_dst,
+                                    self.p_script_dst))
                     elif line.find("Error: listen EADDRINUSE: address already in use") > -1:
                         Common.warning("Stray Pixelstream process still around, resting for 5s and bailing out...")
                         time.sleep(5.0)
@@ -345,9 +354,6 @@ WHILE (get-process -ID $NodePid) {
                         Common.warning("Unreal disconnected from Pixelstream server, bailing out")
                         self.terminate_web_process = True
                         self.webserver_executing = None
-                    #elif line.find("Lib vorbis DLL was dynamically loaded") > -1:
-                    #    # @@@ test
-                    #    print("""{"taskdescription":"%s","uri":"%s"}""" % (line, self.item))
                 if self.terminate_web_process:
                     Common.warning(
                         'Pre-emptive terminating web server process (pid: {0}).'.format(self.webserver_process.pid)
@@ -384,20 +390,20 @@ WHILE (get-process -ID $NodePid) {
         self.webserver_exitcode = exitcode
 
     def get_commandline(self, item):
-        '''(REQUIRED) Return command line as a string array'''
+        """(REQUIRED) Return command line as a string array"""
         # Check if correct version of V-ray - verify size of main library
         path_executable = self.get_executable()
         args = []
 
         Common.info("Reading config")
         hostname = socket.gethostname()
-        if hostname not in App.SETTINGS["ports"]:
+        if hostname not in Engine.SETTINGS["ports"]:
             raise Exception("This host({}) is not in app port settings!".format(hostname))
 
-        LANE_NUMBER = int(os.environ["ACCSYN_LANE"])
+        lane_number = int(os.environ["ACCSYN_LANE"])
 
         args.extend(["-PixelStreamingIP=127.0.0.1", "-PixelStreamingPort={}".format(
-            App.SETTINGS["ports"][hostname]["stream"] + LANE_NUMBER - 1)])
+            Engine.SETTINGS["ports"][hostname]["stream"] + lane_number - 1)])
         if "parameters" in self.get_compute():
             parameters = self.get_compute()["parameters"]
             if 0 < len(parameters.get("arguments") or ""):
@@ -411,26 +417,26 @@ WHILE (get-process -ID $NodePid) {
             retval.extend(args)
             return retval
 
-        raise Exception('This operating system is not recognized by this accsyn' ' app!')
+        raise Exception('This operating system is not recognized by this accsyn engine!')
 
     def post(self, exitcode):
-        '''Post execution, to be overridden.'''
+        """Post execution, to be overridden."""
         Common.info("Telling web server process (and TURN server) to exit")
         self.terminate_web_process = True
 
 if __name__ == "__main__":
     if "--help" in sys.argv:
-        App.usage()
+        Engine.usage()
     else:
         # Common.set_debug(True)
         try:
-            app = App(sys.argv)
+            engine = Engine(sys.argv)
             if "--probe" in sys.argv:
-                app.probe()
+                engine.probe()
             else:
-                app.load()  # Load data
-                app.execute()  # Run
+                engine.load()  # Load data
+                engine.execute()  # Run
         except:
-            App.warning(traceback.format_exc())
-            App.usage()
+            Engine.warning(traceback.format_exc())
+            Engine.usage()
             sys.exit(1)

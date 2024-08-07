@@ -1,41 +1,45 @@
-'''
+"""
 
-	Mantra(Houdini) 19.5 accsyn compute app script.
+    Mantra(Houdini) 19.5 accsyn compute engine script.
 
-	Finds and executes Mantra by building a commandline out of 'item'(frame number)
-	and parameters provided.
+    Finds and executes Mantra by building a commandline out of 'item'(frame number)
+    and parameters provided.
 
-	Changelog:
+    Changelog:
 
         v1r3; (Henrik Norin, 23.01.18) Fixed path bug.
         v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
-		v1r1; Initial version
+        v1r1; Initial version
 
-	This software is provided "as is" - the author and distributor can not be held
-	responsible for any damage caused by executing this script in any means.
+    This software is provided "as is" - the author and distributor can not be held
+    responsible for any damage caused by executing this script in any means.
 
-	Author: Henrik Norin, HDR AB
+    Author: Henrik Norin, HDR AB
 
-'''
+"""
 
-import os, sys, traceback
+import os
+import sys
+import traceback
 
 try:
     if 'ACCSYN_COMPUTE_COMMON_PATH' in os.environ:
         sys.path.append(os.environ['ACCSYN_COMPUTE_COMMON_PATH'])
     from common import Common
 except ImportError as e:
-    print >> sys.stderr, "Cannot import accsyn common app (required), make sure to name it 'common.py' add its parent directory to PYTHONPATH. Details: %s" % e
+    sys.stderr.write("Cannot import accsyn common engine (required), make sure to name it 'common.py' add its parent"
+                     " directory to PYTHONPATH. Details: {}".format(e))
     raise
 
 
-class App(Common):
+class Engine(Common):
     __revision__ = 3  # Increment this after each update
 
-    # App configuration
-    # IMPORTANT NOTE: This section defines app behaviour and should not be refactored or moved away from the enclosing START/END markers. Read into memory by backend at start and publish.
+    # Engine configuration
+    # IMPORTANT NOTE: This section defines engine behaviour and should not be refactored or moved away from the
+    # enclosing START/END markers. Read into memory by backend at start and publish.
     # --- Start edit here
-    # -- APP CONFIG START --
+    # -- ENGINE CONFIG START --
 
     SETTINGS = {
         "items": True,
@@ -51,26 +55,27 @@ class App(Common):
 
     ENVS = {}
 
-    # -- APP CONFIG END --
+    # -- ENGINE CONFIG END --
     # -- Stop edit here
 
     def __init__(self, argv):
-        super(App, self).__init__(argv)
+        super(Engine, self).__init__(argv)
 
     @staticmethod
     def get_path_version_name():
-        '''Don't touch this'''
+        """Don't touch this"""
         p = os.path.realpath(__file__)
         parent = os.path.dirname(p)
-        return (os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0])
+        return os.path.dirname(parent), os.path.basename(parent), os.path.splitext(os.path.basename(p))[0]
 
     @staticmethod
     def usage():
-        '''Don't touch this'''
+        """Don't touch this"""
         (unused_cp, cv, cn) = Common.get_path_version_name()
-        (unused_p, v, n) = App.get_path_version_name()
+        (unused_p, v, n) = Engine.get_path_version_name()
         Common.info(
-            "   Accsyn compute app '%s' v%s-%s(common: v%s-%s) " % (n, v, App.__revision__, cv, Common.__revision__)
+            '   accsyn compute engine "{}" v{}-{}(common: v{}-{})'.format(n, v, Engine.__revision__, cv,
+                                                                          Common.__revision__)
         )
         Common.info("")
         Common.info("   Usage: python %s {--probe|<path_json_data>}" % n)
@@ -78,15 +83,15 @@ class App(Common):
         Common.info("       --help            Show this help.")
         Common.info("       --dev             Development mode, debug is on and launch dummy executable.")
         Common.info("")
-        Common.info("       --probe           Have app check if it is found and of correct version.")
+        Common.info("       --probe           Have engine check if it is found and of correct version.")
         Common.info("")
         Common.info(
-            "       <path_json_data>  Execute app on data provided in the JSON and ACCSYN_xxx environment variables."
+            "       <path_json_data>  Execute engine on data provided in the JSON and ACCSYN_xxx environment variables."
         )
         Common.info("")
 
     def probe(self):
-        '''(Optional) Do nothing if found, raise exception otherwise.'''
+        """(Optional) Do nothing if found, raise exception otherwise."""
         exe = self.get_executable()
         assert os.path.exists(exe), "'{}' does not exist!".format(exe)
         # TODO, check if correct versions of dependencies
@@ -96,7 +101,7 @@ class App(Common):
     # --- Start edit here
 
     def get_executable(self):
-        '''(REQUIRED) Return path to executable as string'''
+        """(REQUIRED) Return path to executable as string"""
 
         def find_houdini(p_base, prefix, version, preferred_version=None):
             if os.path.exists(p_base):
@@ -152,14 +157,14 @@ class App(Common):
             )
 
     def get_envs(self):
-        '''Get site specific envs'''
+        """Get site specific envs"""
         result = {}
         return result
 
     def get_commandline(self, item):
-        '''
+        """
         (REQUIRED) Return command line as a string array
-        '''
+        """
         args = []
         path_input = self.data['compute']['input']
         path_input = path_input % (int(item))
@@ -183,10 +188,8 @@ class App(Common):
             retval.extend(args)
             return retval
 
-        raise Exception("This OS is not recognized by this Accsyn app!")
-
     def get_creation_flags(self, item):
-        '''Always run on low priority on windows'''
+        """Always run on low priority on windows"""
         if Common.is_win():
             ABOVE_NORMAL_PRIORITY_CLASS = 0x00008000
             BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
@@ -202,16 +205,16 @@ class App(Common):
 
 if __name__ == '__main__':
     if "--help" in sys.argv:
-        App.usage()
+        Engine.usage()
     else:
         try:
-            app = App(sys.argv)
+            engine = Engine(sys.argv)
             if "--probe" in sys.argv:
-                app.probe()
+                engine.probe()
             else:
-                app.load()  # Load data
-                app.execute()  # Run
+                engine.load()  # Load data
+                engine.execute()  # Run
         except:
-            App.warning(traceback.format_exc())
-            App.usage()
+            Engine.warning(traceback.format_exc())
+            Engine.usage()
             sys.exit(1)
