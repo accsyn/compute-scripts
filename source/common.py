@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r40; [Henrik Norin, 24.10.03] Fixed bug in console logging.
         * v1r39; [Henrik Norin, 24.07.02] Support JSON decode of data.
         * v1r38; [Henrik Norin, 23.11.20] Prevent crash on non encodeable stdout/stderr. Support for escaping backlash in
         arguments using %5C syntax, %20 to whitespace. Support variable substitution.
@@ -44,7 +45,6 @@ from __future__ import print_function
 import os
 import sys
 import json
-#import logging
 import subprocess
 import traceback
 import socket
@@ -69,7 +69,7 @@ if sys.version_info[0] < 3:
 
 
 class Common(object):
-    __revision__ = 39  # Will be automatically increased each publish.
+    __revision__ = 40  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -1268,7 +1268,7 @@ class Common(object):
                 # Read data waiting for us in pipes
                 stdout = Common.safely_printable(self.process.stdout.readline())
                 try:
-                    Common.log("{}".format(stdout), end="")
+                    Common.log("{}".format(stdout))
                     sys.stdout.flush()
 
                     process_result = self.process_output(stdout, "")
