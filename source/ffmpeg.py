@@ -7,6 +7,7 @@
 
     Changelog:
 
+        * v1r6; (Henrik, 24.10.08) Adjusted arguments to argument build function due to changes in common.
         * v1r5; (Henrik, 23.11.24) Support for escape sequences in profile. Support
         space in input path.
         * v1r4; (Henrik, 23.11.01) Fix profile bug; H265 profile.
@@ -164,7 +165,8 @@ class App(Common):
         else:
             Common.log("[WARNING] No profile specified, no transcoding will be done!")
 
-        arguments = arguments.replace("${PROFILE}", Common.build_arguments(profile_arguments, escaped_quotes=False))
+        arguments = arguments.replace("${PROFILE}", Common.build_arguments(profile_arguments,
+                                                                           escaped_quotes=False, join=True))
 
         suffix = ""
         if profile_data and "suffix" in profile_data:
@@ -203,7 +205,7 @@ class App(Common):
         output_path = os.path.join(output_path, filename_output)
         arguments = arguments.replace("${OUTPUT}", output_path.replace(" ", "%20"))
 
-        args.extend(Common.build_arguments(arguments, join=False))
+        args.extend(Common.build_arguments(arguments))
 
         Common.log("Transcoding '{}' => '{}' using ffmpeg profile {}, arguments: {}".format(
             input_path, output_path, profile, profile_arguments))
