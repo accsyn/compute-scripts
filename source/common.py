@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r41; [Henrik Norin, 24.10.08] Fixed bug in building arguments, default should be to not join.
         * v1r40; [Henrik Norin, 24.10.03] Fixed bug in console logging.
         * v1r39; [Henrik Norin, 24.07.02] Support JSON decode of data.
         * v1r38; [Henrik Norin, 23.11.20] Prevent crash on non encodeable stdout/stderr. Support for escaping backlash in
@@ -1056,10 +1057,10 @@ class Common(object):
         return result
 
     @staticmethod
-    def build_arguments(arguments, escaped_quotes=True, join=True):
+    def build_arguments(arguments, escaped_quotes=True, join=False):
         """
         Convert arguments, if *escaped_quotes* is true url encoded quotes is
-        supported in *arguments* to allow whitespace in arguments, using %22 notatation.
+        supported in *arguments* to allow whitespace in arguments, using %22 notation.
 
         Example:
 
