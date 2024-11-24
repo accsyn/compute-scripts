@@ -7,6 +7,7 @@
 
     Changelog:
 
+        * v1r5: (Henrik Norin, 24.11.16) Aligned with v3
         * v1r4; (Henrik Norin, 22.11.11) Report progress frame number/uri within a bucket. Url encoded arguments
         support.
         * v1r3; (Henrik Norin, 22.06.27) Make sure not all lines in files have slash conversions.

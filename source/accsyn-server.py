@@ -6,6 +6,8 @@
 
     Changelog:
 
+        * v1r4; (Henrik, 24.11.01) Ident directory to empty file
+        * v1r3; (Henrik, 24.09.11) Create store directory
         * v1r2; (Henrik, 24.09.11) Create store directory
         * v1r1; (Henrik, 24.08.20) Initial version
 
@@ -35,7 +37,7 @@ except ImportError as e:
 
 
 class Engine(Common):
-    __revision__ = 2  # Increment this after each update
+    __revision__ = 4  # Increment this after each update
 
     # Engine configuration
     # IMPORTANT NOTE:
@@ -62,16 +64,25 @@ class Engine(Common):
 
     def __init__(self, argv):
         super(Engine, self).__init__(argv)
-        as_root_path = os.environ.get('AS_ROOT_PATH')
-        assert as_root_path, 'AS_ROOT_PATH not set!'
-        storage_path = os.path.join(as_root_path, 'storage')
+        as_server_root_path = os.environ.get('AS_ROOT_PATH')
+        assert as_server_root_path, 'AS_ROOT_PATH not set!'
+        if not os.path.exists(as_server_root_path):
+            os.makedirs(as_server_root_path, exist_ok=True)
+            Common.info(f"Created server path: {as_server_root_path}")
+        as_hosting_root_path = os.path.dirname(as_server_root_path)
+        storage_path = os.path.join(as_hosting_root_path, 'storage')
         if not os.path.exists(storage_path):
             os.makedirs(storage_path)
             Common.info(f"Created storage directory: {storage_path}")
-            workspace = os.environ.get('AS_WORKSPACE')
-            if workspace:
-                meta_path = os.path.join(as_root_path, workspace)
-                os.makedirs(meta_path)
+            workspace_code = os.environ.get('AS_WORKSPACE')
+            if workspace_code:
+                # Help identify workspace
+                ident_path = os.path.join(as_hosting_root_path, workspace_code)
+                if not os.path.exists(ident_path):
+                    with open(ident_path, 'w') as f:
+                        f.write('')
+                    Common.info(f"Created workspace ident file: {ident_path}")
+
     @staticmethod
     def get_path_version_name():
         p = os.path.realpath(__file__)
@@ -133,6 +144,8 @@ class Engine(Common):
         arguments = str(parameters["arguments"])
 
         args.extend(Common.build_arguments(arguments, join=False))
+
+        args.extend([f"--hostingIdent={os.environ.get('AS_WORKSPACE') or '-'}"])
 
         Common.log("Running accsyn daemon, args: ".format(args))
 

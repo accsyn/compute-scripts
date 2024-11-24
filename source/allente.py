@@ -6,8 +6,8 @@
 
     Changelog:
 
-        * v1r2; (Henrik, 24.07.13) Initial version
-        * v1r1; (Henrik, 24.06.22) Initial version
+        * v1r2; (Henrik, 24.07.13) Updates
+        * v1r1; (Henrik, 24.06.22) Initial version for accsyn v3
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -38,7 +38,7 @@ except ImportError as e:
 
 
 class Engine(Common):
-    __revision__ = 1  # Increment this after each update
+    __revision__ = 2  # Increment this after each update
 
     # Engine configuration
     # IMPORTANT NOTE:

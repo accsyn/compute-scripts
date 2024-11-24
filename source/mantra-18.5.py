@@ -7,10 +7,11 @@
 
     Changelog:
 
-        v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
-        v1r3; More relaxed executable locator, accepts latest <major>.<minor> version.
-        v1r2; Wrong call to debug.
-        v1r1; Compliance to accsyn v1.4.
+      * v1r3: (Henrik Norin, 24.11.16) Aligned with v3
+      * v1r2; (Henrik Norin, 22.11.11) Url encoded arguments support.
+      * v1r3; More relaxed executable locator, accepts latest <major>.<minor> version.
+      * v1r2; Wrong call to debug.
+      * v1r1; Compliance to accsyn v1.4.
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -34,7 +35,7 @@ except ImportError as e:
 
 
 class Engine(Common):
-    __revision__ = 4  # Increment this after each update
+    __revision__ = 3  # Increment this after each update
 
     # Engine configuration
     # IMPORTANT NOTE: This section defines engine behaviour and should not be refactored or moved away from the

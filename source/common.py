@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r42; [Henrik Norin, 24.11.14] Use new volume share notation. Support accsyn paths on the form 'share=(default)/share/path'. Define working path. Properly handle Popen shell argument, now defaults to false.
         * v1r41; [Henrik Norin, 24.10.08] Fixed bug in building arguments, default should be to not join.
         * v1r40; [Henrik Norin, 24.10.03] Fixed bug in console logging.
         * v1r39; [Henrik Norin, 24.07.02] Support JSON decode of data.
@@ -70,7 +71,7 @@ if sys.version_info[0] < 3:
 
 
 class Common(object):
-    __revision__ = 40  # Will be automatically increased each publish.
+    __revision__ = 42  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -271,8 +272,8 @@ class Common(object):
                 return entry["path"]
 
     def normalize_path(self, p, mkdirs=False):
-        """Based on share mappings supplied, convert a foreign path to local
-        platform"""
+        """Based on share mappings supplied, convert a foreign accsyn path on the form
+        'share=<volume, shared folder or collection code or id>/path' to local platform"""
         self.debug("normalize_path({0},{1})".format(p, mkdirs))
         if p is None or 0 == len(p):
             return p
@@ -286,20 +287,26 @@ class Common(object):
                 idx_slash = p.find("/")
                 p_rel = None
                 if -1 < idx_slash:
-                    share_code = p[:idx_slash].split("=")[-1]
+                    share_code_or_id = p[:idx_slash].split("=")[-1]
                     p_rel = p[idx_slash + 1:]
                 else:
-                    share_code = p.split("=")[-1]
+                    share_code_or_id = p.split("=")[-1]
+                if share_code_or_id.lower() == "(default)":
+                     # Locate and use the default share
+                     for share in self.data.get("shares") or []:
+                        if share.get("default") is True:
+                            share_code_or_id = share["code"]
+                            break
                 # Check if re-mapped locally
-                prefix_to = self.get_mapped_share_path(share_code)
+                prefix_to = self.get_mapped_share_path(share_code_or_id)
                 # Should be provided so we can convert to root share relative path
                 if prefix_to is None and "share_paths" in self.get_compute()["parameters"]:
-                    if share_code in self.get_compute()["parameters"]["share_paths"]:
-                        d = self.get_compute()["parameters"]["share_paths"][share_code]
+                    if share_code_or_id in self.get_compute()["parameters"]["share_paths"]:
+                        d = self.get_compute()["parameters"]["share_paths"][share_code_or_id]
                         share_path = d["s_path"]
                         p_orig = str(p)
                         p = "share={0}{1}{2}".format(
-                            d["r_s"],
+                            d.get("volume", d["r_s"]),
                             ("/" + share_path) if 0 < len(share_path) and share_path not in ["/", "\\"] else "",
                             ("/" + p_rel) if p_rel else "",
                         )
@@ -342,7 +349,7 @@ class Common(object):
                         if prefix_from:
                             break
                 if prefix_from is None:
-                    # Any supplied path conversions?
+                    # Any supplied mapped share path conversions?
                     if "mapped_share_paths" in self.get_compute()["parameters"]:
                         for d in self.get_compute()["parameters"]["mapped_share_paths"]:
                             self.debug("(Supplied mapped shares path normalize) entry: '{0}'".format(d))
@@ -537,6 +544,14 @@ class Common(object):
     def get_creation_flags(self, item):
         """(OPTIONAL) Return the process creation flags."""
         return None
+
+    def get_working_path(self):
+        """(OPTIONAL) Return the working path for the process, should be overridden by engine."""
+        return os.path.expanduser("~")
+
+    def shell(self):
+        """(OPTIONAL) Return True if command should be executed in shell."""
+        return False
 
     def process_output(self, stdout, stderr):
         """
@@ -1073,9 +1088,9 @@ class Common(object):
             return []
         if not isinstance(arguments, list):
             arguments = (arguments or "").replace("%5C", "\\")
-            if -1 < arguments.find("%22") and escaped_quotes:
+            if "%22" in arguments and escaped_quotes:
                 result = []
-                # Preprocess
+                # Preprocess escaped quoted
                 for index, part in enumerate(arguments.split("%22")):
                     if (index % 2) == 0:
                         result.extend([s for s in part.split(" ") if 0 < len(s.strip())])  # Normal arg
@@ -1085,7 +1100,9 @@ class Common(object):
                 result = arguments.split(" ")
         else:
             result = arguments
-        result = [argument.replace("%5C", "\\").replace("%22", '"').replace("%20", " ") for argument in result]
+        result = [argument.replace("%5C", "\\").replace("%22", '"').replace("%20", " ")
+                  for argument in result if argument is not None]
+        result = [argument for argument in result if 0 < len(argument.strip())]
         if join:
             return " ".join(result)
         else:
@@ -1214,9 +1231,12 @@ class Common(object):
             if new_envs:
                 Common.info("Environment variables: '{0}'".format(new_envs))
             creationflags = self.get_creation_flags(item)
-            Common.info("Changing directory to home...")
-            os.chdir(os.path.expanduser("~"))
-            Common.info("Running: '{0}'".format(str([Common.safely_printable(s) for s in commands])))
+            working_path = self.get_working_path()
+            if working_path is not None:
+                Common.info("Changing directory to: {}".format(working_path))
+                os.chdir(working_path)
+            shell = self.shell()
+            Common.info("Running: '{0}' (shell={1})".format(str([Common.safely_printable(s) for s in commands]), shell))
             if stdin:
                 Common.info("Stdin: '{0}".format(stdin))
             if creationflags:
@@ -1228,36 +1248,44 @@ class Common(object):
                 if creationflags is not None:
                     self.process = subprocess.Popen(
                         commands,
-                        shell=True,
+                        shell=shell,
                         stdin=subprocess.PIPE,
                         env=new_envs,
                         creationflags=creationflags,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
+                        cwd=working_path
                     )
                 else:
                     self.process = subprocess.Popen(
                         commands,
-                        shell=True,
+                        shell=shell,
                         stdin=subprocess.PIPE,
                         env=new_envs,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
+                        cwd=working_path
                     )
 
             else:
                 if creationflags is not None:
                     self.process = subprocess.Popen(
                         commands,
-                        shell=True,
+                        shell=shell,
                         env=new_envs,
                         creationflags=creationflags,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
+                        cwd=working_path
                     )
                 else:
                     self.process = subprocess.Popen(
-                        commands, True, env=new_envs, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+                        commands,
+                        shell=shell,
+                        env=new_envs,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        cwd=working_path
                     )
             while True:
                 if first_run:

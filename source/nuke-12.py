@@ -7,6 +7,7 @@
 
     Changelog:
 
+        * v1r6: (Henrik Norin, 24.11.16) Aligned with v3
         * v1r5; (Henrik Norin, 22.11.11) Report progress frame number/uri within a bucket. Url encoded arguments
         support.
         * v1r4; Python 3 compliance. Convert windows paths to Nuke (/) during input file conversion.
@@ -43,7 +44,7 @@ except ImportError as e:
 
 
 class Engine(Common):
-    __revision__ = 5  # Will be automatically increased each publish
+    __revision__ = 6  # Will be automatically increased each publish
 
     # Engine configuration
     #
