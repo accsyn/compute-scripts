@@ -5,6 +5,8 @@
 
     Changelog:
 
+        * v1r44; [Henrik Norin, 24.12.13] Support wider accsyn path notations such as volume=..., folder=..., collection=... and home=...
+        * v1r43; [Henrik Norin, 24.11.26] Fixed bug where it was looking for deprecated 'r_s'(root share) key in share mappings.
         * v1r42; [Henrik Norin, 24.11.14] Use new volume share notation. Support accsyn paths on the form 'share=(default)/share/path'. Define working path. Properly handle Popen shell argument, now defaults to false.
         * v1r41; [Henrik Norin, 24.10.08] Fixed bug in building arguments, default should be to not join.
         * v1r40; [Henrik Norin, 24.10.03] Fixed bug in console logging.
@@ -71,7 +73,7 @@ if sys.version_info[0] < 3:
 
 
 class Common(object):
-    __revision__ = 42  # Will be automatically increased each publish.
+    __revision__ = 44  # Will be automatically increased each publish.
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -271,6 +273,12 @@ class Common(object):
                 )
                 return entry["path"]
 
+    @staticmethod
+    def is_accsyn_path(path):
+        """Return true if *path* is on the accsyn form 'share=...' or similar"""
+        return (path and path.lower().startswith("share=") or path.lower().startswith("volume=") or
+                path.lower().startswith("folder=") or path.lower().startswith("collection=") or path.lower().startswith("home="))
+
     def normalize_path(self, p, mkdirs=False):
         """Based on share mappings supplied, convert a foreign accsyn path on the form
         'share=<volume, shared folder or collection code or id>/path' to local platform"""
@@ -282,8 +290,8 @@ class Common(object):
             prefix_from = prefix_to = None
             # Turn paths
             p = p.replace("\\", "/")
-            if p.lower().startswith("share="):
-                # A path relative share, must be made relative root share first
+            if Common.is_accsyn_path(p):
+                # A path relative share, must be made relative volume first
                 idx_slash = p.find("/")
                 p_rel = None
                 if -1 < idx_slash:
@@ -299,20 +307,20 @@ class Common(object):
                             break
                 # Check if re-mapped locally
                 prefix_to = self.get_mapped_share_path(share_code_or_id)
-                # Should be provided so we can convert to root share relative path
+                # Should be provided so we can convert to volume relative path
                 if prefix_to is None and "share_paths" in self.get_compute()["parameters"]:
                     if share_code_or_id in self.get_compute()["parameters"]["share_paths"]:
                         d = self.get_compute()["parameters"]["share_paths"][share_code_or_id]
                         share_path = d["s_path"]
                         p_orig = str(p)
                         p = "share={0}{1}{2}".format(
-                            d.get("volume", d["r_s"]),
+                            d.get("volume", d["v"]),
                             ("/" + share_path) if 0 < len(share_path) and share_path not in ["/", "\\"] else "",
                             ("/" + p_rel) if p_rel else "",
                         )
                         self.debug(
                             "(Share path normalize) Converted share "
-                            "relative path '{0}' > root share relative: '{1}' (share"
+                            "relative path '{0}' > volume relative: '{1}' (share"
                             " paths: {2})".format(p_orig, p, self.get_compute()["parameters"]["share_paths"])
                         )
             if prefix_to is None:
@@ -320,7 +328,7 @@ class Common(object):
                 for share in self.data.get("shares") or []:
                     for path_ident, prefix in share.get("paths", {}).items():
                         self.debug(
-                            "(Root share {0} path normalize) path_ident.lower()"
+                            "(Volume {0} path normalize) path_ident.lower()"
                             ": '{1}', Common.get_os().lower(): '{2}'"
                             "(prefix_from: {3}, prefix_to: {4})".format(
                                 share['code'], path_ident.lower(), Common.get_os().lower(), prefix_from, prefix_to
@@ -356,7 +364,7 @@ class Common(object):
                             if p.lower().startswith(d["remote"].replace("\\", "/").lower()):
                                 prefix_from = d["remote"]
                                 prefix_to = d["local"]
-                                if prefix_to.lower().startswith("share="):
+                                if Common.is_accsyn_path(prefix_to):
                                     share_id_or_code = prefix_to.split("=")[-1]
                                     for share in self.data.get("shares") or []:
                                         if (
@@ -366,16 +374,16 @@ class Common(object):
                                             if Common.get_os().lower() in share.get("paths", {}):
                                                 prefix_to = share["paths"][Common.get_os().lower()]
                                             break
-                                    if prefix_to.lower().startswith("share="):
+                                    if Common.is_accsyn_path(prefix_to):
                                         raise Exception(
-                                            "Cannot find root share {0}"
+                                            "Cannot find volume {0}"
                                             " for remote mapped path conversion {1} for my os({2})!".format(
                                                 share_id_or_code, d, Common.get_os()
                                             )
                                         )
                                 break
             if prefix_to:
-                if p.startswith("share="):
+                if Common.is_accsyn_path(p):
                     idx_slash = p.find("/")
                     p = prefix_to + (p[idx_slash:] if -1 < idx_slash else "")
                 elif prefix_from:
@@ -401,7 +409,7 @@ class Common(object):
                 "Details: {1}".format(json.dumps(self.data, indent=3, cls=JSONEncoder), traceback.format_exc())
             )
 
-        if p.startswith("share="):
+        if Common.is_accsyn_path(p):
             # Will never work
             raise Exception("Cannot convert accsyn path {0} to local!".format(p))
 
@@ -748,8 +756,8 @@ class Common(object):
                             elif input_conversion == "platform":
                                 remote_os = self.get_remote_os()
                                 if remote_os != self.get_os():
-                                    # Does the root share path differ between platforms?
-                                    # TODO: Support site root share path overrides
+                                    # Does the volume path differ between platforms?
+                                    # TODO: Support site volume path overrides
                                     remote_prefix = local_prefix = None
                                     for share in self.data.get("shares") or []:
                                         if remote_os in share.get("paths", {}):
@@ -764,22 +772,22 @@ class Common(object):
                                                 p_input_prefix, self.get_os(), p_localized_ext
                                             )
                                             Common.info(
-                                                "(Localization) Remote root share path prefix ({}) and local ({}) "
+                                                "(Localization) Remote volume path prefix ({}) and local ({}) "
                                                 "differs, need to localize!".format(remote_prefix, local_prefix)
                                             )
                                         else:
                                             Common.info(
-                                                "(Localization) Remote root share path prefix ({}) and local ({}) are "
+                                                "(Localization) Remote volume path prefix ({}) and local ({}) are "
                                                 "the same, no need to localize...".format(remote_prefix, local_prefix)
                                             )
                                     if remote_prefix is None:
                                         Common.warning(
-                                            "(Localization) Do not know remote root share prefix on {}, cannot "
+                                            "(Localization) Do not know remote volume prefix on {}, cannot "
                                             "localize '{}'...".format(remote_os, p_input)
                                         )
                                     if local_prefix is None:
                                         Common.warning(
-                                            "(Localization) Do not know local root share prefix on {}, cannot localize"
+                                            "(Localization) Do not know local volume prefix on {}, cannot localize"
                                             " '{}'...".format(self.get_os(), p_input)
                                         )
                                 else:
@@ -829,7 +837,7 @@ class Common(object):
                                     if lock_taken:
                                         try:
                                             conversions = []
-                                            # First supply root share conversions
+                                            # First supply volume conversions
                                             for share in self.data.get("shares") or []:
                                                 prefix_from = prefix_to = None
                                                 for path_ident, prefix in share.get("paths", {}).items():
