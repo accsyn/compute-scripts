@@ -71,9 +71,8 @@ if sys.version_info[0] < 3:
 #    ]
 #)
 
-
 class Common(object):
-    __revision__ = 44  # Will be automatically increased each publish.
+    __revision__ = 44
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
