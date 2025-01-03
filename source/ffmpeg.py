@@ -7,12 +7,13 @@
 
     Changelog:
 
-        * v1r7; (Henrik, 24.11.08) Support output path already defined in profile, with new hls profile. Align with v3 changes in common.
-        * v1r6; (Henrik, 24.10.08) Adjusted arguments to argument build function due to changes in common.
-        * v1r5; (Henrik, 23.11.24) Support for escape sequences in profile. Support
+        * v1r8; [Henrik, 24.12.19] Prevent creation output path when it is given as a file.
+        * v1r7; [Henrik, 24.11.08] Support output path already defined in profile, with new hls profile. Align with v3 changes in common.
+        * v1r6; [Henrik, 24.10.08] Adjusted arguments to argument build function due to changes in common.
+        * v1r5; [Henrik, 23.11.24] Support for escape sequences in profile. Support
         space in input path.
-        * v1r4; (Henrik, 23.11.01) Fix profile bug; H265 profile.
-        * v1r1; (Henrik, 23.09.29) Initial version
+        * v1r4; [Henrik, 23.11.01] Fix profile bug; H265 profile.
+        * v1r1; [Henrik, 23.09.29] Initial version
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -40,7 +41,7 @@ except ImportError as e:
 
 
 class Engine(Common):
-    __revision__ = 7  # Increment this after each update
+    __revision__ = 8  # Increment this after each update
 
     # Engine configuration
     # IMPORTANT NOTE:
@@ -68,7 +69,7 @@ class Engine(Common):
                 "chdir_output": True,
                 "no_append_output": True,
                 "suffix": "_${PROFILE_NAME}",
-                "output_directory": True
+                "output_is_folder": True
             }
         },
         "type": "transcode",
@@ -138,6 +139,44 @@ class Engine(Common):
         result = {}
         return result
 
+    def get_profile_data(self):
+        """ Return the profile data for the current profile"""
+        profile = None
+        if 'profile' in self.get_compute():
+            profile = self.get_compute()['profile']
+        else:
+            parameters = self.get_compute()["parameters"]
+            arguments = str(parameters["arguments"])
+            if "${PROFILE}" in arguments:
+                profile = (parameters.get("profile", "") or "").strip()
+        if not profile:
+            raise Exception("[WARNING] No profile specified, transcoding cannot be done!")
+        profiles = Engine.SETTINGS.get("profiles")
+        if not profiles:
+            raise Exception("No profiles defined in engine settings")
+        if profile not in profiles:
+            raise Exception("Profile '{}' not found among profiles".format(profile))
+        return profile, profiles.get(profile)
+
+    def get_output(self):
+        """ Return the output file or folder"""
+        result = super(Engine, self).get_output()
+        if not result:
+            # Check for default output
+            profile, profile_data = self.get_profile_data()
+            if 'default_output' in profile_data:
+                Common.log("No output path defined, falling back on default output: {}".format(
+                    profile_data['default_output']))
+                result = profile_data['default_output']
+            else:
+                Common.log("[WARNING] No output path defined, will output to same folder as input.")
+                result = os.path.dirname(self.get_input())
+        return result
+
+    def output_is_folder(self):
+        """ Check if folder output is defined by profile """
+        return self.get_profile_data()[1].get("output_is_folder", super(Engine, self).output_is_folder())
+
     def get_commandline(self, item):
         """(REQUIRED) Return command line as a string array"""
         args = []
@@ -162,71 +201,42 @@ class Engine(Common):
 
         arguments = arguments.replace("${INPUT}", input_path.replace(" ", "%20"))  # Preserve whitespace
 
-        profile = None
-        if 'profile' in self.get_compute():
-            profile = self.get_compute()['profile']
-        elif "${PROFILE}" in arguments:
-            profile = (parameters.get("profile", "") or "").strip()
-        profile_data = None
-        profile_arguments = ""
-
-        if profile is not None and len(profile) > 0:
-            # Locate profile among profiles
-            profiles = Engine.SETTINGS["profiles"]
-            if profile not in profiles:
-                raise Exception("Profile '{}' not found among profiles".format(profile))
-            profile_data = profiles[profile]
-            profile_arguments = profile_data["arguments"]
-        else:
-            Common.log("[WARNING] No profile specified, no transcoding will be done!")
+        profile, profile_data = self.get_profile_data()
+        profile_arguments = profile_data["arguments"]
 
         arguments = arguments.replace("${PROFILE}", profile_arguments)
 
         suffix = ""
-        if profile_data and "suffix" in profile_data:
+        if "suffix" in profile_data:
             suffix = Common.substitute(profile_data["suffix"], {
                 "PROFILE_NAME": profile
             })
 
-        chdir_output = profile_data.get('chdir_output', False) if profile_data else False
-        output_directory = profile_data.get('output_directory', False) if profile_data else False
-        no_append_output = profile_data.get('no_append_output', False) if profile_data else False
-        if "output" in self.get_compute():
-            output_path = self.normalize_path(self.get_compute()["output"])
-        else:
-            if profile_data and 'default_output' in profile_data:
-                Common.log("No output path defined, falling back on default output: {}".format(
-                    profile_data['default_output']))
-                output_path = self.normalize_path(profile_data['default_output'])
-            else:
-                Common.log("[WARNING] No output path defined, will output to same folder as input.")
-                output_path = os.path.dirname(input_path)
-
-            if output_directory:
-                subdir = os.path.splitext(os.path.basename(input_path))[0]
-                Common.log(f"Output to subdirectory: '{subdir}'")
-                output_path = os.path.join(output_path, subdir)
-
-        if not os.path.exists(output_path):
-            Common.log("[WARNING] Output media path not found @ {}, creating".format(output_path))
-            os.makedirs(output_path)
+        chdir_output = profile_data.get('chdir_output', False)
+        no_append_output = profile_data.get('no_append_output', False)
+        output_path = self.get_output()
 
         if not no_append_output:
-            extension = ""
-            if profile_data and "extension" in profile_data:
-                extension = profile_data["extension"]
 
-            if output_path == os.path.dirname(input_path) and suffix == "":
-                suffix = "_transcoded"
-                Common.log("[WARNING] Output path is same as input path, appending '_transcoded' suffix to prevent "
-                           "overwrite of input media!")
+            if self.output_is_folder():
+                extension = ""
+                if "extension" in profile_data:
+                    extension = profile_data["extension"]
 
-            filename_output = os.path.basename(input_path)
-            if suffix != "" or extension != "":
-                filename_output = os.path.splitext(filename_output)[0] + suffix + (extension if extension != "" else
-                                                                                   os.path.splitext(filename_output)[1])
+                if output_path == os.path.dirname(input_path) and suffix == "":
+                    suffix = "_transcoded"
+                    Common.log("[WARNING] Output path is same as input path, appending '_transcoded' suffix to prevent "
+                               "overwrite of input media!")
 
-            output_path = os.path.join(output_path, filename_output)
+                filename_output = os.path.basename(input_path)
+                if suffix != "" or extension != "":
+                    filename_output = os.path.splitext(filename_output)[0] + suffix + (extension if extension != "" else
+                                                                                       os.path.splitext(
+                                                                                           filename_output)[1])
+
+                output_path = os.path.join(output_path, filename_output)
+            else:
+                Common.log(f"Not appending input filename to output path")
 
             arguments = arguments.replace("${OUTPUT}", output_path.replace(" ", "%20"))
         else:

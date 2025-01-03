@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r45; [Henrik Norin, 24.12.23] Support situations were output path is a file and not a directory - prevent folder creation. Store raw input & output path, as it were before prepare/localization.
         * v1r44; [Henrik Norin, 24.12.13] Support wider accsyn path notations such as volume=..., folder=..., collection=... and home=...
         * v1r43; [Henrik Norin, 24.11.26] Fixed bug where it was looking for deprecated 'r_s'(root share) key in share mappings.
         * v1r42; [Henrik Norin, 24.11.14] Use new volume share notation. Support accsyn paths on the form 'share=(default)/share/path'. Define working path. Properly handle Popen shell argument, now defaults to false.
@@ -72,7 +73,7 @@ if sys.version_info[0] < 3:
 #)
 
 class Common(object):
-    __revision__ = 44
+    __revision__ = 45
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -278,10 +279,10 @@ class Common(object):
         return (path and path.lower().startswith("share=") or path.lower().startswith("volume=") or
                 path.lower().startswith("folder=") or path.lower().startswith("collection=") or path.lower().startswith("home="))
 
-    def normalize_path(self, p, mkdirs=False):
+    def normalize_path(self, p):
         """Based on share mappings supplied, convert a foreign accsyn path on the form
         'share=<volume, shared folder or collection code or id>/path' to local platform"""
-        self.debug("normalize_path({0},{1})".format(p, mkdirs))
+        self.debug("normalize_path({0})".format(p))
         if p is None or 0 == len(p):
             return p
         try:
@@ -412,15 +413,6 @@ class Common(object):
             # Will never work
             raise Exception("Cannot convert accsyn path {0} to local!".format(p))
 
-        if mkdirs:
-            if not os.path.exists(p):
-                try:
-                    os.makedirs(p)
-                    self.warning("Created missing folder: '{0}'".format(p))
-                except:
-                    self.warning(traceback.format_exc())
-            else:
-                self.info("Folder '{0}' exists.".format(p))
         return p
 
     # DEBUGGING ###############################################################
@@ -650,35 +642,33 @@ class Common(object):
         return False, lock_path
 
     def get_input(self):
-        """ Return the input file, single entry or based on item/other parameter. Can be overridden by engine as needed"""
+        """ Return the input file, single entry or based on item/other parameter. Can be overridden by engine
+        as needed """
         if "input" in self.get_compute():
-            p_input = self.get_compute()["input"]
-
-            if not isinstance(p_input, list):
-                return p_input
-            else:
-                if not self.item:
-                    raise Exception("No item (input file # to process) for engine")
-                index = int(self.item)
-                if index < 0 or index >= len(p_input):
-                    raise Exception("Item/file #{} not found among inputs".format(self.item))
-                return p_input[index]
-
+            return self.get_compute()["input"]
         return None
 
     def set_input(self, value):
         """ Set the input file, single entry or based on item/other parameter. Can be overridden by engine as needed"""
+        if "raw_input" not in self.get_compute():
+            self.get_compute()["raw_input"] = self.get_input()  # Store original input
+        self.get_compute()["input"] = value
 
-        input = self.get_compute()["input"]
-        if not isinstance(input, list):
-            self.get_compute()["input"] = value
-        else:
-            if not self.item:
-                raise Exception("No item (input file # to process) for engine")
-            index = int(self.item)
-            if index < 0 or index >= len(input):
-                raise Exception("Item/file #{} not found among inputs".format(self.item))
-            input[index] = value
+    def get_output(self):
+        """ Return the output file or folder, single entry or based on item/other parameter. Can be overridden by engine
+        as needed """
+        if "output" in self.get_compute():
+            return self.get_compute()["output"]
+        return None
+
+    def create_output_folder(self):
+        """ Return true if the output folder should be created during prepare, false if it should not.
+        Can be overridden by engine"""
+        return self.get_compute().get('create_output_folder', True)
+
+    def output_is_folder(self):
+        """ Return true if the output is a folder, false if it is a file. Can be overridden by engine as needed """
+        return self.get_compute().get("output_is_folder", True)
 
     def prepare(self):
         """Prepare execution - localize files."""
@@ -915,8 +905,22 @@ class Common(object):
                 )
         # Any output file?
         if "output" in self.data["compute"]:
-            p_output = self.normalize_path(self.get_compute()["output"], mkdirs=True)
+            self.get_compute()["raw_output"] = self.get_output()
+            p_output = self.normalize_path(
+                self.get_output()
+            )
             self.get_compute()["output"] = p_output
+            # Create output directory?
+            if self.create_output_folder():
+                p_output_folder = p_output if self.output_is_folder() else os.path.dirname(p_output)
+                if not os.path.exists(p_output_folder):
+                    try:
+                        os.makedirs(p_output_folder)
+                        self.warning("Created missing output folder: '{0}'".format(p_output_folder))
+                    except:
+                        self.warning(traceback.format_exc())
+                else:
+                    self.info("Folder '{0}' exists.".format(p_output_folder))
             if "clear_output_directory" in self.get_compute()["parameters"]:
                 do_clear_output = None
                 cod = self.get_compute()["parameters"]["clear_output_directory"]

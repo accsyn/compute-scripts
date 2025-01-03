@@ -174,9 +174,7 @@ class Engine(Common):
             if 'arguments' in parameters:
                 args.extend(Common.build_arguments(parameters['arguments']))
         if 'output' in self.data['compute']:
-            path_output = self.normalize_path(
-                self.data['compute']['output'], mkdirs=True
-            )  # Do this so folder is created
+            path_output = self.get_output()
             self.debug("Rendering to '%s'" % path_output)
         args.extend(["-f", self.normalize_path(path_input)])
 
