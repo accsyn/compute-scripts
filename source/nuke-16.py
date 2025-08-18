@@ -7,8 +7,7 @@
 
     Changelog:
 
-        * v1r2: (Henrik Norin, 24.11.16) - Aligned with v3
-        * v1r1; (Henrik Norin, 23.01.17) Initial version cloned from Nuke 14 script.
+        * v1r1; (Henrik Norin, 23.08.18) Initial version cloned from Nuke 14 script.
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -38,7 +37,7 @@ except ImportError as e:
 
 
 class Engine(Common):
-    __revision__ = 2  # Will be automatically increased each publish
+    __revision__ = 1  # Will be automatically increased each publish
 
     # Engine configuration
     #
@@ -64,7 +63,7 @@ class Engine(Common):
 
     # -- ENGINE CONFIG END --
 
-    NUKE_VERSION = '15'
+    NUKE_VERSION = '16'
 
     def __init__(self, argv):
         super(Engine, self).__init__(argv)

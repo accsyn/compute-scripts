@@ -5,6 +5,8 @@
 
     Changelog:
 
+        * v1r47; [Henrik Norin, 25.08.18] Added str_file_size helper util.
+        * v1r46; [Henrik Norin, 25.04.06] Fix bug where paths on the form volume=<id>/.. did not convert to the correct volume native path.
         * v1r45; [Henrik Norin, 24.12.23] Support situations were output path is a file and not a directory - prevent folder creation. Store raw input & output path, as it were before prepare/localization.
         * v1r44; [Henrik Norin, 24.12.13] Support wider accsyn path notations such as volume=..., folder=..., collection=... and home=...
         * v1r43; [Henrik Norin, 24.11.26] Fixed bug where it was looking for deprecated 'r_s'(root share) key in share mappings.
@@ -73,7 +75,7 @@ if sys.version_info[0] < 3:
 #)
 
 class Common(object):
-    __revision__ = 45
+    __revision__ = 46
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -280,14 +282,14 @@ class Common(object):
                 path.lower().startswith("folder=") or path.lower().startswith("collection=") or path.lower().startswith("home="))
 
     def normalize_path(self, p):
-        """Based on share mappings supplied, convert a foreign accsyn path on the form
+        """Based on share mappings supplied, convert a foreign raw accsyn path on the form
         'share=<volume, shared folder or collection code or id>/path' to local platform"""
         self.debug("normalize_path({0})".format(p))
         if p is None or 0 == len(p):
             return p
         try:
             p_orig = str(p)
-            prefix_from = prefix_to = None
+            prefix_from = prefix_to = share_code_or_id = None
             # Turn paths
             p = p.replace("\\", "/")
             if Common.is_accsyn_path(p):
@@ -326,6 +328,9 @@ class Common(object):
             if prefix_to is None:
                 # On a known share that can be converted?
                 for share in self.data.get("shares") or []:
+                    if share_code_or_id and not (share["code"].lower() == share_code_or_id.lower() or
+                                                 share["id"].lower() == share_code_or_id.lower()):
+                        continue
                     for path_ident, prefix in share.get("paths", {}).items():
                         self.debug(
                             "(Volume {0} path normalize) path_ident.lower()"
@@ -1158,7 +1163,7 @@ class Common(object):
     def task_started(self, uri):
         """A task has been started within a bucket"""
         self.info("Task started: {}".format(uri))
-        if not self._current_task is None and self._current_task != uri:
+        if self._current_task is not None and self._current_task != uri:
             # Current task is done
             print("""{"taskstatus":true,"uri":"%s","status":"done"}""" % (self._current_task))
         self._current_task = uri
@@ -1208,8 +1213,8 @@ class Common(object):
             self.post(exitcode)
 
     def _execute(self, item, additional_envs=None):
-        """Internal execution function, can be overridden in case engine script does its own execution handling instead of
-        calling a subprocess."""
+        """Internal execution function, can be overridden in case engine script does its own execution handling instead
+        of calling a subprocess."""
         commands = self.get_commandline(item)
         if commands is None or len(commands) == 0:
             raise Exception("Empty command line!")
@@ -1352,6 +1357,20 @@ class Common(object):
     def get_allowed_exitcodes(self):
         return [0]
 
+    # UTILS
+
+    @staticmethod
+    def str_file_size(num, suffix='B', si=True):
+        if num is None:
+            return None
+        elif num == -1:
+            return "-"
+        divider = 1000.0 if si else 1024.0
+        for unit in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
+            if abs(num) < divider:
+                return "%3.1f%s%s" % (num, "%s%s" % (unit, "i" if not si else ""), suffix)
+            num /= divider
+        return f"{num:.1f}Y{suffix}"
 
 class JSONEncoder(json.JSONEncoder):
     @staticmethod

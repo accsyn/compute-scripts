@@ -163,6 +163,7 @@ class Engine(Common):
         content.set("Value", asset_name)
 
     def _execute(self, item, additional_envs=None):
+        """ (Override) Execute the engine on the provided item."""
 
         # Create the root element
         root = ET.Element('ADI')
