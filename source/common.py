@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r48; [Henrik Norin, 25.09.10] Dropped Python 2 support. Improved stderr support and logging. Utility for scanning finished frames.
         * v1r47; [Henrik Norin, 25.08.18] Added str_file_size helper util.
         * v1r46; [Henrik Norin, 25.04.06] Fix bug where paths on the form volume=<id>/.. did not convert to the correct volume native path.
         * v1r45; [Henrik Norin, 24.12.23] Support situations were output path is a file and not a directory - prevent folder creation. Store raw input & output path, as it were before prepare/localization.
@@ -61,9 +62,8 @@ import datetime
 import shutil
 import signal
 import re
-
-if sys.version_info[0] < 3:
-    import unicodedata
+import threading
+import queue  # Python 3
 
 #logging.basicConfig(
 #    format="(%(asctime)-15s) %(message)s",
@@ -75,7 +75,7 @@ if sys.version_info[0] < 3:
 #)
 
 class Common(object):
-    __revision__ = 46
+    __revision__ = 48
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -86,6 +86,8 @@ class Common(object):
 
     _dev = False
     _debug = False
+    _last_stdout_flush = time.time()
+    _last_stderr_flush = time.time()
 
     # Engine configuration
     # IMPORTANT NOTE:
@@ -130,7 +132,7 @@ class Common(object):
         self.executing = False
         self.exitcode_force = None
         self.process = None
-        self.data = {}
+        self.data = dict()
 
         if "--dev" in argv:
             Common._dev = True
@@ -139,11 +141,11 @@ class Common(object):
         assert len(sys.argv) == 2 or (
             len(sys.argv) == 3 and self.is_dev()
         ), "Please provide path to compute data (json) as only argument!"
-        self.path_data = argv[1] if not self.is_dev() else argv[2]
+        self._path_data = argv[1] if not self.is_dev() else argv[2]
         # (Parallellizable apps) The part to execute
         self.item = os.environ.get("ACCSYN_ITEM")
         # Find out and report my PID, write to sidecar file
-        self.path_pid = os.path.join(os.path.dirname(self.path_data), "process.pid")
+        self.path_pid = os.path.join(os.path.dirname(self._path_data), "process.pid")
         with open(self.path_pid, "w") as f:
             f.write(str(os.getpid()))
         if self.is_debug():
@@ -152,6 +154,7 @@ class Common(object):
             Common.info("Accsyn PID({0})".format(os.getpid()))
         self.check_mounts()
         self._current_task = None
+        self._background_worker_thread = None
 
     @staticmethod
     def get_path_version_name():
@@ -208,57 +211,86 @@ class Common(object):
     def safely_printable(s):
         if s is None:
             return None
-        if 2 < sys.version_info[0]:
+        if isinstance(s, bytes):
+            try:
+                return s.decode("utf-8")
+            except:
+                try:
+                    return s.decode("utf-16")
+                except Exception as e:
+                    Common.warning(str(e))
+        if not isinstance(s, str):
+            s = str(s)
             if isinstance(s, bytes):
                 try:
                     return s.decode("utf-8")
-                except:
-                    try:
-                        return s.decode("utf-16")
-                    except Exception as e:
-                        Common.warning(str(e))
-            if not isinstance(s, str):
-                s = str(s)
-                if isinstance(s, bytes):
-                    try:
-                        return s.decode("utf-8")
-                    except Exception as e:
-                        Common.warning(str(e))
-                        return "(unprintable bytes)"
-                else:
-                    return s
+                except Exception as e:
+                    Common.warning(str(e))
+                    return "(unprintable bytes)"
             else:
                 return s
         else:
-            return unicodedata.normalize("NFKD", unicode(s) if not isinstance(s, unicode) else s).encode(
-                "ascii", errors="ignore"
-            )
-
+            return s
 
     @staticmethod
-    def log(s, end=None):
-        """Log to public log"""
-        if end:
-            try:
-                print("!{}".format(s), end=end)
-            except:
-                # Python2 syntax
-                sys.stdout.write("!{}".format(s))
-        else:
-            print("!{}".format(s))
-        sys.stdout.flush()
-
+    def log(s, end=None, with_date=True):
+        """Log to public log @ stdout"""
+        try:
+            date_part = f'({datetime.datetime.now()}) ' if with_date else ''
+            if end is not None:
+                print(f"!{date_part}{s}", end=end)
+            else:
+                print(f"!{date_part}{s}")
+            if time.time() - Common._last_stdout_flush > 2: # Flush every 2 seconds
+                Common._last_stdout_flush = time.time()
+                sys.stdout.flush()
+        except Exception as e:
+            Common.warning(str(e))
+ 
     @staticmethod
-    def info(s):
+    def log_stderr(s, end=None, with_date=True):
+        """ Log to public log @ stderr """
+        try:
+            date_part = f'({datetime.datetime.now()}) ' if with_date else ''
+            if end is not None:
+                print(f"!{date_part}{s}", file=sys.stderr, end=end)
+            else:
+                print(f"!{date_part}{s}", file=sys.stderr)
+            if time.time() - Common._last_stderr_flush > 2: # Flush every 2 seconds
+                Common._last_stderr_flush = time.time()
+                sys.stderr.flush()
+        except Exception as e:
+            Common.warning(str(e))
+ 
+    @staticmethod
+    def info(s, end=None, with_date=True):
         """ Log to service log"""
-        print("[INFO] {}".format(s))
-        sys.stdout.flush()
+        try:
+            date_part = f'({datetime.datetime.now()}) ' if with_date else ''
+            if end is not None:
+                print(f"{date_part}[INFO] [ACCSYN] {s}", end=end)
+            else:
+                print(f"{date_part}[INFO] [ACCSYN] {s}")
+            if time.time() - Common._last_stdout_flush > 2: # Flush every 2 seconds
+                Common._last_stdout_flush = time.time()
+                sys.stdout.flush()
+        except Exception as e:
+            Common.warning(str(e))
 
     @staticmethod
-    def warning(s):
+    def warning(s, append_prefix=True, end=None, with_date=True):
         """ Warn to service log"""
-        print("[WARNING] [ACCSYN] {}".format(s))
-        sys.stdout.flush()
+        try:
+            date_part = f'({datetime.datetime.now()})' if with_date else ''
+            if end is not None:
+                print(f"{date_part}{'[WARNING] [ACCSYN] ' if append_prefix else ''}{s}", file=sys.stderr, end=end)
+            else:
+                print(f"{date_part}{'[WARNING] [ACCSYN] ' if append_prefix else ''}{s}", file=sys.stderr)
+            if time.time() - Common._last_stderr_flush > 2: # Flush every 2 seconds
+                Common._last_stderr_flush = time.time()
+                sys.stderr.flush()
+        except Exception as e:
+            Common.warning(str(e))
 
     # PATH CONVERSION
 
@@ -444,7 +476,9 @@ class Common(object):
     def debug(self, s):
         if self.is_debug():
             print("<<ACCSYN APP DEBUG>> {0}".format(s))
-            sys.stdout.flush()
+            if time.time() - Common._last_stdout_flush > 2: # Flush every 2 seconds
+                Common._last_stdout_flush = time.time()
+                sys.stdout.flush()
 
     @staticmethod
     def set_debug(debug):
@@ -557,29 +591,37 @@ class Common(object):
         """(OPTIONAL) Return True if command should be executed in shell."""
         return False
 
+    def do_print(stderr=False):
+        """ Return True if the output should be printed to the console. To be overridden by engine. """
+        return True
+
     def process_output(self, stdout, stderr):
         """
-        (OPTIONAL) Sift through stdout/stderr and take action.
+        Sift through stdout/stderr and take action. To be overridden by engine.
 
         Return value:
            None (default); Do nothing, keep execution going.
            integer; Terminate process and force exit code to this value.
-        """
+        """       
+        return None
+
+    def get_background_worker(self):
+        """(interval, func) tuple containing the interval in seconds (float) and function to run in the background. Return None if no background worker is needed. To be overridden by engine."""
         return None
 
     ###########################################################################
 
     def load(self):
         """Load the data from disk, must be run BEFORE execution"""
-        assert os.path.exists(self.path_data) or os.path.isdir(
-            self.path_data
-        ), "Data not found or is directory @ '{0}'!".format(self.path_data)
+        assert os.path.exists(self._path_data) or os.path.isdir(
+            self._path_data
+        ), "Data not found or is directory @ '{0}'!".format(self._path_data)
         try:
-            self.data = json.load(open(self.path_data, "r"), cls=JSONDecoder)
+            self.data = json.load(open(self._path_data, "r"), cls=JSONDecoder)
         except:
             Common.warning(
                 "Loading the execution data caused exception {0}: {1}".format(
-                    traceback.format_exc(), open(self.path_data, "r").read()
+                    traceback.format_exc(), open(self._path_data, "r").read()
                 )
             )
             raise
@@ -1134,32 +1176,6 @@ class Common(object):
             s = s.replace("${%s}" % key, value)
         return s
 
-    @staticmethod
-    def recursive_kill_windows_pid(pid):
-        output = subprocess.check_output(
-            "wmic process where (ParentProcessId={0}) get ProcessId".format(pid), shell=True
-        )
-        if 0 < len(output or ""):
-            for line in output.decode("utf-8").split("\n"):
-                try:
-                    Common.recursive_kill_windows_pid(int(line.strip()))
-                except:
-                    pass
-        print("os.system('WMIC PROCESS WHERE processid={0} CALL Terminate')".format(pid))
-
-    def kill(self):
-        """Kill the current running PID"""
-        if not self.executing or self.process is None:
-            Common.warning("Refusing terminate - not running or have no process info!")
-            return
-        Common.warning("Terminating PID: {0}".format(self.process.pid))
-        if Common.is_win():
-            Common.recursive_kill_windows_pid(self.process.pid)
-            # os.system('TASKKILL /f /PID {0}'.format(self.process.pid))
-        else:
-            os.killpg(self.process.pid, signal.SIGKILL)
-            # os.system('kill -9 {0}'.format(self.process.pid))
-
     def task_started(self, uri):
         """A task has been started within a bucket"""
         self.info("Task started: {}".format(uri))
@@ -1167,6 +1183,84 @@ class Common(object):
             # Current task is done
             print("""{"taskstatus":true,"uri":"%s","status":"done"}""" % (self._current_task))
         self._current_task = uri
+
+    def task_done(self, uri):
+        """A task has been completed"""
+        self.info("Task done: {}".format(uri))
+        if self._current_task is None or self._current_task != uri:
+            # Current task is done
+            print("""{"taskstatus":true,"uri":"%s","status":"done"}""" % (uri))
+        self._current_task = uri
+
+    @staticmethod
+    def scan_file_sequences(root_folder):
+        """
+        Scan a folder recursively for file sequences and return them grouped by pattern.
+        
+        Args:
+            root_folder (str): Root folder path to scan
+            
+        Returns:
+            list: List of dictionaries with sequence information:
+                [{"subdir":"layer1", "filename":"SC0120_CAM_0070.PathTraced", "frames":[1517,1518,..], "ext":"exr"}]
+        """
+        if not os.path.exists(root_folder):
+            Common.warning(f"Folder does not exist: {root_folder}")
+            return []
+        
+        sequences = {}  # key: (subdir, filename, ext), value: set of frame numbers
+        
+        # Walk through all subdirectories
+        for root, dirs, files in os.walk(root_folder):
+            # Calculate relative subdirectory path
+            subdir = os.path.relpath(root, root_folder)
+            if subdir == ".":
+                subdir = ""
+            
+            for file in files:
+                # Skip hidden files and files without extensions
+                if file.startswith('.'):
+                    continue
+                
+                # Split filename into parts
+                parts = file.split('.')
+                if len(parts) < 3:  # Need at least: prefix.number.ext
+                    continue
+                
+                # Extract extension (last part)
+                ext = parts[-1]
+                
+                # Try to find frame number (second to last part should be numeric)
+                try:
+                    frame_num = int(parts[-2])
+                except (ValueError, IndexError):
+                    continue  # Skip if frame number is not numeric
+                
+                # Reconstruct filename prefix (everything except frame number and extension)
+                filename_prefix = '.'.join(parts[:-2])
+                
+                # Create sequence key
+                seq_key = (subdir, filename_prefix, ext)
+                
+                # Add to sequences dictionary
+                if seq_key not in sequences:
+                    sequences[seq_key] = set()
+                sequences[seq_key].add(frame_num)
+        
+        # Convert to list format
+        result = []
+        for (subdir, filename, ext), frames in sequences.items():
+            result.append({
+                "subdir": subdir,
+                "filename": filename,
+                "frames": sorted(list(frames)),
+                "ext": ext
+            })
+        
+        # Sort by subdirectory and filename for consistent ordering
+        result.sort(key=lambda x: (x["subdir"], x["filename"]))
+        
+        return result
 
     @staticmethod
     def parse_number(fragment):
@@ -1189,28 +1283,54 @@ class Common(object):
         except:
             print(traceback.format_exc())
         return result
+    
+    def _run_background_worker(self):
+        """ Run the background worker thread """
+        Common.info("Background worker thread started")
+        (interval, func) = self.get_background_worker()
+        while self.executing:
+            had_error = False
+            try:
+                func()
+            except Exception as e:
+                had_error = True
+                Common.warning(traceback.format_exc())
+                Common.warning(f"Error when running background worker: {e}")
+            time.sleep(interval * (10 if had_error else 0))
+        Common.info("Background worker thread finished")
 
     def execute(self):
         """Run computation/render"""
         self.prepare()
         self.pre()
         exitcode = -1
+        background_worker = self.get_background_worker()
+        self.executing = True
         try:
-            if "max_bucketsize" in self.SETTINGS and self.SETTINGS["max_bucketsize"] == 1 and self.item.find("-") > 0:
-                Common.info("Renderer can only execute one item at a time.")
-                # Render a batch of items, one by one
-                first = int(self.item.split("-")[0])
-                last = int(self.item.split("-")[-1])
-                for item in range(first, last + 1):
-                    # Tell accsyn previous task is done
-                    self.task_started(str(item))
-                    Common.info("*" * 100)
-                    Common.info("Batch executing item {} of [{}-{}]".format(item, first, last))
-                    exitcode = self._execute(item, additional_envs={"ACCSYN_ITEM": str(item)})
-            else:
-                exitcode = self._execute(self.item)
+            if background_worker is not None:
+                self._background_worker_thread = threading.Thread(target=self._run_background_worker)
+                self._background_worker_thread.start()
+            try:
+                if "max_bucketsize" in self.SETTINGS and self.SETTINGS["max_bucketsize"] == 1 and self.item.find("-") > 0:
+                    Common.info("Renderer can only execute one item at a time.")
+                    # Render a batch of items, one by one
+                    first = int(self.item.split("-")[0])
+                    last = int(self.item.split("-")[-1])
+                    for item in range(first, last + 1):
+                        # Tell accsyn previous task is done
+                        self.task_started(str(item))
+                        Common.info("*" * 100)
+                        Common.info("Batch executing item {} of [{}-{}]".format(item, first, last))
+                        exitcode = self._execute(item, additional_envs={"ACCSYN_ITEM": str(item)})
+                else:
+                    exitcode = self._execute(self.item)
+            finally:
+                self.post(exitcode)
         finally:
-            self.post(exitcode)
+            self.executing = False
+            if self._background_worker_thread:
+                self._background_worker_thread.join()
+                self._background_worker_thread = None
 
     def _execute(self, item, additional_envs=None):
         """Internal execution function, can be overridden in case engine script does its own execution handling instead
@@ -1222,8 +1342,7 @@ class Common(object):
         if len(app_envs) == 0:
             app_envs = None
         log = True
-        exitcode = None
-        self.executing = True
+        exitcode = None     
         try:
             new_envs = None
             if app_envs or additional_envs:
@@ -1236,13 +1355,6 @@ class Common(object):
                 if additional_envs:
                     for k, v in additional_envs.items():
                         new_envs[str(Common.safely_printable(k))] = str(Common.safely_printable(v))
-            for idx in range(0, len(commands)):
-                if (
-                    not isinstance(commands[idx], str)
-                    and sys.version_info[0] < 3
-                    and isinstance(commands[idx], unicode)
-                ):
-                    commands[idx] = commands[idx].encode(u"utf-8")
             stdin = self.get_stdin(item)
             if new_envs:
                 Common.info("Environment variables: '{0}'".format(new_envs))
@@ -1269,7 +1381,7 @@ class Common(object):
                         env=new_envs,
                         creationflags=creationflags,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
+                        stderr=subprocess.PIPE,
                         cwd=working_path
                     )
                 else:
@@ -1279,7 +1391,7 @@ class Common(object):
                         stdin=subprocess.PIPE,
                         env=new_envs,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
+                        stderr=subprocess.PIPE,
                         cwd=working_path
                     )
 
@@ -1291,7 +1403,7 @@ class Common(object):
                         env=new_envs,
                         creationflags=creationflags,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
+                        stderr=subprocess.PIPE,
                         cwd=working_path
                     )
                 else:
@@ -1300,33 +1412,126 @@ class Common(object):
                         shell=shell,
                         env=new_envs,
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
+                        stderr=subprocess.PIPE,
                         cwd=working_path
                     )
-            while True:
+            # Create queues for stdout and stderr
+            stdout_queue = queue.Queue()
+            stderr_queue = queue.Queue()
+            
+            def read_stdout():
+                Common.info("stdout thread spawned")
+                try:
+                    while True:
+                        line = self.process.stdout.readline()
+                        if line:
+                            stdout_queue.put(line)
+                        else:
+                            break
+                except:
+                    pass
+                finally:
+                    stdout_queue.put(None)  # Signal end
+                Common.info("stdout thread finished")
+            
+            def read_stderr():
+                Common.info("stderr thread spawned")
+                try:
+                    while True:
+                        line = self.process.stderr.readline()
+                        if line:
+                            stderr_queue.put(line)
+                        else:
+                            break
+                except:
+                    pass
+                finally:
+                    stderr_queue.put(None)  # Signal end
+                Common.info("stderr thread finished")
+            
+            # Start threads for reading stdout and stderr
+            stdout_thread = threading.Thread(target=read_stdout)
+            stderr_thread = threading.Thread(target=read_stderr)
+            stdout_thread.daemon = True
+            stderr_thread.daemon = True
+            stdout_thread.start()
+            stderr_thread.start()
+            
+            stdout_ended = False
+            stderr_ended = False
+            
+            exitcode = -999999
+
+            while not (stdout_ended and stderr_ended):
                 if first_run:
                     Common.info("Additional accsyn PID({0}) - main process".format(self.process.pid))
                     if stdin:
                         self.process.stdin.write(stdin)
+                        self.process.stdin.close()
                     first_run = False
 
-                # Read data waiting for us in pipes
-                stdout = Common.safely_printable(self.process.stdout.readline())
+                # Check for stdout data
                 try:
-                    Common.log("{}".format(stdout))
-                    sys.stdout.flush()
+                    while not stdout_ended and not stdout_queue.empty():
+                        line = stdout_queue.get(timeout=0.1)
+                        if line is None:
+                            stdout_ended = True
+                        else:
+                            stdout = Common.safely_printable(line)
 
-                    process_result = self.process_output(stdout, "")
-                    if process_result is not None:
-                        Common.warning("Pre-emptive terminating process (pid: {0}).".format(self.process.pid))
-                        exitcode = process_result
-                        break
-                    elif stdout == "" and self.process.poll() is not None:
-                        break
+                            if Common.do_print(False):
+                                Common.log(stdout, end="")
+                            else:
+                                Common.info(stdout, end="")
+        
+                            process_result = self.process_output(stdout, "")
+                            if process_result is not None:
+                                Common.warning("Pre-emptive terminating process (pid: {0}).".format(self.process.pid))
+                                exitcode = process_result
+                                break
+                except queue.Empty:
+                    pass
                 except:
                     Common.warning(traceback.format_exc())
-
-            self.process.communicate()
+                
+                # Check for stderr data
+                try:
+                    while not stderr_ended and not stderr_queue.empty():
+                        line = stderr_queue.get(timeout=0.1)
+                        if line is None:
+                            stderr_ended = True
+                        else:
+                            stderr = Common.safely_printable(line)
+                            if Common.do_print(True):
+                                Common.log_stderr(stderr, end="")
+                            else:
+                                Common.warning(stderr, append_prefix=False, end="")
+        
+                            # Also pass stderr to process_output for compatibility
+                            process_result = self.process_output("", stderr)
+                            if process_result is not None:
+                                Common.warning("Pre-emptive terminating process (pid: {0}).".format(self.process.pid))
+                                exitcode = process_result
+                                break
+                except queue.Empty:
+                    pass
+                except:
+                    Common.warning(traceback.format_exc())
+                
+                # Check if process has ended
+                exitcode = self.process.poll()
+                if exitcode is not None and stdout_ended and stderr_ended:
+                    Common.info("Process has ended, and all output has been captured.")
+                    break
+            
+            # Wait for threads to finish
+            Common.info("Waiting for stdout and stderr threads to finish...")
+            stdout_thread.join(timeout=1.0)
+            stderr_thread.join(timeout=1.0)
+            
+            # Make sure process is finished
+            Common.info("Waiting for process to finish...")
+            self.process.wait()
             if exitcode is None:
                 exitcode = self.process.returncode
 
@@ -1335,8 +1540,7 @@ class Common(object):
                 self.process.terminate()
             except:
                 pass
-            self.executing = False
-
+ 
         self.process = None
 
         if self.exitcode_force is not None:
@@ -1353,6 +1557,33 @@ class Common(object):
         assert exitcode == 0, "Execution failed, check log for clues..."
 
         return exitcode
+
+
+    @staticmethod
+    def recursive_kill_windows_pid(pid):
+        output = subprocess.check_output(
+            "wmic process where (ParentProcessId={0}) get ProcessId".format(pid), shell=True
+        )
+        if 0 < len(output or ""):
+            for line in output.decode("utf-8").split("\n"):
+                try:
+                    Common.recursive_kill_windows_pid(int(line.strip()))
+                except:
+                    pass
+        print("os.system('WMIC PROCESS WHERE processid={0} CALL Terminate')".format(pid))
+
+    def kill(self):
+        """Kill the current running PID"""
+        if not self.executing or self.process is None:
+            Common.warning("Refusing terminate - not running or have no process info!")
+            return
+        Common.warning("Terminating PID: {0}".format(self.process.pid))
+        if Common.is_win():
+            Common.recursive_kill_windows_pid(self.process.pid)
+            # os.system('TASKKILL /f /PID {0}'.format(self.process.pid))
+        else:
+            os.killpg(self.process.pid, signal.SIGKILL)
+            # os.system('kill -9 {0}'.format(self.process.pid))
 
     def get_allowed_exitcodes(self):
         return [0]

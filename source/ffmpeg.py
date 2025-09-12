@@ -146,7 +146,7 @@ class Engine(Common):
             profile = self.get_compute()['profile']
         else:
             parameters = self.get_compute()["parameters"]
-            arguments = str(parameters["arguments"])
+            arguments = str(parameters.get("arguments", ""))
             if "${PROFILE}" in arguments:
                 profile = (parameters.get("profile", "") or "").strip()
         if not profile:
