@@ -6,6 +6,8 @@
 
     Changelog:
 
+        * v1r3; [Henrik Norin, 25.09.17] Fixed PKL verifier bug with assets in subfolders.
+        * v1r2; [Henrik Norin, 25.09.15] Add debug logging.
         * v1r1; [Henrik Norin, 25.08.12] Initial version
 
     This software is provided "as is" - the author and distributor can not be held
@@ -47,7 +49,7 @@ except ImportError as e:
 class Engine(Common):
     """Accsyn compute engine for validating files/media."""
 
-    __revision__ = 1  # Increment this after each update
+    __revision__ = 3  # Increment this after each update
 
     # Engine configuration
     # IMPORTANT NOTE:
@@ -210,7 +212,7 @@ class Engine(Common):
 
     def verify_asset(self, currentdir: Path, originalfilename: str, asset_id: str, size: int,
                      expected_hash: str, assetmap_index: dict[str, str]):
-
+        self.debug(f"Verifying asset {asset_id} having original filename {originalfilename} in {currentdir} with expected hash {expected_hash} and size {size} (assetmap_index: {assetmap_index})")
         if not originalfilename:
             rel = assetmap_index.get(asset_id)
             if rel:
@@ -224,6 +226,17 @@ class Engine(Common):
             alt = (currentdir.parent / originalfilename).resolve()
             if alt.exists():
                 candidate = alt
+            else:
+                # Use asset map index
+                rel = assetmap_index.get(asset_id)
+                if rel:
+                    candidate = (currentdir / rel).resolve()
+                    if candidate.exists():
+                        originalfilename = rel
+                    else:
+                        candidate = (currentdir.parent / rel).resolve()
+                        if candidate.exists():
+                            originalfilename = rel
 
         if not candidate.exists():
             Common.log(f"[ERROR] *** WARNING MISSING FILE *** {originalfilename} *** WARNING MISSING FILE ***")
@@ -239,7 +252,7 @@ class Engine(Common):
         self._total_files_processed += 1
         self._total_bytes_processed += candidate.stat().st_size
 
-        Common.log(f"File {candidate.name} is: ")
+        Common.log(f"File {candidate.name} is: ", end="")
         actual = self.calc_sha1_base64(candidate)
         if actual != expected_hash:
             Common.log(f"NOT OK")

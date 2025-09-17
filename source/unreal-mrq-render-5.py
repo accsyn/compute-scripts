@@ -10,7 +10,8 @@
 
     Changelog:
 
-        v1r1; [250908, Henrik Norin] Initial version.
+        v1r1; [25.09.17, Henrik Norin] Read Perforce credentials from file pointed out by environment variable.
+        v1r1; [25.09.08, Henrik Norin] Initial version.
 
     This software is provided "as is" - the author and distributor can not be held
     responsible for any damage caused by executing this script in any means.
@@ -150,10 +151,8 @@ def create_mrq(
 create_mrq(level_path="%s", sequence_path="%s", preset_path="%s", output_dir="%s", start_frame=%s, end_frame=%s, asset_path="%s")
 """
 
-PIPELINE_CREDENTIALS_PATH="\\\\192.168.111.3\\RAIDPOOL01\\_TOOLS\\ACCSYN_TOOLS\\pipeline.csv"
-
 class Engine(Common):
-    __revision__ = 5  # Increment this after each update
+    __revision__ = 6  # Increment this after each update
 
     # Engine configuration
     # IMPORTANT NOTE:
@@ -317,7 +316,7 @@ class Engine(Common):
         Common.log(f"(pre) Project folder: {self.project_folder_path}")
 
          # First, sync perforce folder       
-        self.sync_perforce_folder()
+        Engine.sync_perforce_folder(self.project_name, self.project_folder_path)    
 
         # Then, generate the MRQ asset
         # Generate a temp python script path
@@ -511,7 +510,8 @@ class Engine(Common):
 
     # Perforce
 
-    def set_perforce_credentials(self):
+    @staticmethod
+    def set_perforce_credentials():
         """ Read and load P4 credentials """
 
         computer_name = socket.gethostname()  # Get computer name
@@ -519,8 +519,16 @@ class Engine(Common):
             Common.log("[ERROR] Unable to get the computer name.")
             sys.exit(1)
 
+        pipeline_credentials_path = os.environ.get("STILLERPIPE_PERFORCE_CREDENTIALS_PATH")
+        if not pipeline_credentials_path:
+            Common.log_stderr("[ERROR] STILLERPIPE_PERFOCE_CREDENTIALS_PATH environment variable is not set.")
+            sys.exit(1)
+        elif not os.path.exists(pipeline_credentials_path):
+            Common.log_stderr("[ERROR] STILLERPIPE_PERFOCE_CREDENTIALS_PATH environment variable is not set.")
+            sys.exit(1)
+            
         entry = None
-        with open(PIPELINE_CREDENTIALS_PATH, "r") as f:
+        with open(pipeline_credentials_path, "r") as f:
             data = f.read()
 
             # Use csv.DictReader to parse the data
@@ -546,9 +554,10 @@ class Engine(Common):
 
         return entry['p4client']
 
-    # def get_latest_changelist(self):    
+    # @staticmethod
+    # def get_latest_changelist(project_folder_path):    
     #     # Run p4 changes to get the latest changelist for the specified path
-    #     command = ["p4", "changes", "-m", "1", f"{self.project_folder_path}"]
+    #     command = ["p4", "changes", "-m", "1", f"{project_folder_path}"]
     #     Common.log("Executing command:", " ".join(command))  # Print the command to be executed
 
     #     try:
@@ -566,9 +575,10 @@ class Engine(Common):
     #         Common.log(f"Error getting the latest changelist: {e.stderr}")
     #         sys.exit(1)
 
-    def sync_perforce_folder(self):
+    @staticmethod
+    def sync_perforce_folder(project_name, project_folder_path):
         """Sync the Perforce folder"""
-        workspace = self.set_perforce_credentials()  # Set up the Perforce credentials
+        workspace = Engine.set_perforce_credentials()  # Set up the Perforce credentials
 
         Common.log(f"Syncing Perforce workspace: {workspace}")
 
@@ -576,9 +586,9 @@ class Engine(Common):
         # command = ["p4", "-c", workspace, "sync", f"{PROJECT_FOLDER_PATH}@{changelist_number}"]
         
         # Change dir to project folder
-        os.chdir(self.project_folder_path)
+        os.chdir(project_folder_path)
         
-        commands = ["p4", "sync", f"//{self.project_name}/Environments/...#head", f"//{self.project_name}/_Tools_Plugins/...#head"]
+        commands = ["p4", "sync", f"//{project_name}/Environments/...#head", f"//{project_name}/_Tools_Plugins/...#head"]
         Common.log("Executing command:", " ".join(commands))  # Print the full command
 
         try:

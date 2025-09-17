@@ -5,6 +5,7 @@
 
     Changelog:
 
+        * v1r48; [Henrik Norin, 25.09.17] Only aggregate stdout & stderr flush during execution.
         * v1r48; [Henrik Norin, 25.09.10] Dropped Python 2 support. Improved stderr support and logging. Utility for scanning finished frames.
         * v1r47; [Henrik Norin, 25.08.18] Added str_file_size helper util.
         * v1r46; [Henrik Norin, 25.04.06] Fix bug where paths on the form volume=<id>/.. did not convert to the correct volume native path.
@@ -75,7 +76,7 @@ import queue  # Python 3
 #)
 
 class Common(object):
-    __revision__ = 48
+    __revision__ = 49
 
     OS_LINUX = "linux"
     OS_MAC = "mac"
@@ -233,7 +234,7 @@ class Common(object):
             return s
 
     @staticmethod
-    def log(s, end=None, with_date=True):
+    def log(s, end=None, with_date=True, aggregated_flush=False):
         """Log to public log @ stdout"""
         try:
             date_part = f'({datetime.datetime.now()}) ' if with_date else ''
@@ -241,14 +242,14 @@ class Common(object):
                 print(f"!{date_part}{s}", end=end)
             else:
                 print(f"!{date_part}{s}")
-            if time.time() - Common._last_stdout_flush > 2: # Flush every 2 seconds
+            if not aggregated_flush or time.time() - Common._last_stdout_flush > 2: # Flush every 2 seconds
                 Common._last_stdout_flush = time.time()
                 sys.stdout.flush()
         except Exception as e:
             Common.warning(str(e))
  
     @staticmethod
-    def log_stderr(s, end=None, with_date=True):
+    def log_stderr(s, end=None, with_date=True, aggregated_flush=False):
         """ Log to public log @ stderr """
         try:
             date_part = f'({datetime.datetime.now()}) ' if with_date else ''
@@ -256,14 +257,14 @@ class Common(object):
                 print(f"!{date_part}{s}", file=sys.stderr, end=end)
             else:
                 print(f"!{date_part}{s}", file=sys.stderr)
-            if time.time() - Common._last_stderr_flush > 2: # Flush every 2 seconds
+            if not aggregated_flush or time.time() - Common._last_stderr_flush > 2: # Flush every 2 seconds
                 Common._last_stderr_flush = time.time()
                 sys.stderr.flush()
         except Exception as e:
             Common.warning(str(e))
  
     @staticmethod
-    def info(s, end=None, with_date=True):
+    def info(s, end=None, with_date=True, aggregated_flush=False):
         """ Log to service log"""
         try:
             date_part = f'({datetime.datetime.now()}) ' if with_date else ''
@@ -271,14 +272,14 @@ class Common(object):
                 print(f"{date_part}[INFO] [ACCSYN] {s}", end=end)
             else:
                 print(f"{date_part}[INFO] [ACCSYN] {s}")
-            if time.time() - Common._last_stdout_flush > 2: # Flush every 2 seconds
+            if not aggregated_flush or time.time() - Common._last_stdout_flush > 2: # Flush every 2 seconds
                 Common._last_stdout_flush = time.time()
                 sys.stdout.flush()
         except Exception as e:
             Common.warning(str(e))
 
     @staticmethod
-    def warning(s, append_prefix=True, end=None, with_date=True):
+    def warning(s, append_prefix=True, end=None, with_date=True, aggregated_flush=False):
         """ Warn to service log"""
         try:
             date_part = f'({datetime.datetime.now()})' if with_date else ''
@@ -286,7 +287,7 @@ class Common(object):
                 print(f"{date_part}{'[WARNING] [ACCSYN] ' if append_prefix else ''}{s}", file=sys.stderr, end=end)
             else:
                 print(f"{date_part}{'[WARNING] [ACCSYN] ' if append_prefix else ''}{s}", file=sys.stderr)
-            if time.time() - Common._last_stderr_flush > 2: # Flush every 2 seconds
+            if not aggregated_flush or time.time() - Common._last_stderr_flush > 2: # Flush every 2 seconds
                 Common._last_stderr_flush = time.time()
                 sys.stderr.flush()
         except Exception as e:
@@ -1480,9 +1481,9 @@ class Common(object):
                             stdout = Common.safely_printable(line)
 
                             if Common.do_print(False):
-                                Common.log(stdout, end="")
+                                Common.log(stdout, end="", aggregated_flush=True)
                             else:
-                                Common.info(stdout, end="")
+                                Common.info(stdout, end="", aggregated_flush=True)
         
                             process_result = self.process_output(stdout, "")
                             if process_result is not None:
@@ -1503,9 +1504,9 @@ class Common(object):
                         else:
                             stderr = Common.safely_printable(line)
                             if Common.do_print(True):
-                                Common.log_stderr(stderr, end="")
+                                Common.log_stderr(stderr, end="", aggregated_flush=True)
                             else:
-                                Common.warning(stderr, append_prefix=False, end="")
+                                Common.warning(stderr, append_prefix=False, end="", aggregated_flush=True)
         
                             # Also pass stderr to process_output for compatibility
                             process_result = self.process_output("", stderr)
@@ -1587,6 +1588,11 @@ class Common(object):
 
     def get_allowed_exitcodes(self):
         return [0]
+
+    def __del__(self):
+        """ Flush stdout and stderr on exit """
+        sys.stdout.flush()
+        sys.stderr.flush()
 
     # UTILS
 
