@@ -5,7 +5,7 @@
 
     Changelog:
 
-        * v1r48; [Henrik Norin, 25.09.17] Only aggregate stdout & stderr flush during execution.
+        * v1r48; [Henrik Norin, 25.09.17] Only aggregate stdout & stderr flush during execution. Expanded log policies. Added execution start time.
         * v1r48; [Henrik Norin, 25.09.10] Dropped Python 2 support. Improved stderr support and logging. Utility for scanning finished frames.
         * v1r47; [Henrik Norin, 25.08.18] Added str_file_size helper util.
         * v1r46; [Henrik Norin, 25.04.06] Fix bug where paths on the form volume=<id>/.. did not convert to the correct volume native path.
@@ -85,6 +85,10 @@ class Common(object):
 
     OUTPUT_METADATA_FILENAME = ".accsyn-compute-metadata.json"
 
+    LOG_POLICY_PUBLIC = "public"
+    LOG_POLICY_SERVICE = "service"
+    LOG_POLICY_MUTE = "mute"
+    
     _dev = False
     _debug = False
     _last_stdout_flush = time.time()
@@ -156,6 +160,7 @@ class Common(object):
         self.check_mounts()
         self._current_task = None
         self._background_worker_thread = None
+        self.execution_start = None
 
     @staticmethod
     def get_path_version_name():
@@ -592,9 +597,9 @@ class Common(object):
         """(OPTIONAL) Return True if command should be executed in shell."""
         return False
 
-    def do_print(stderr=False):
-        """ Return True if the output should be printed to the console. To be overridden by engine. """
-        return True
+    def log_policy(self, text, stderr=False):
+        """ Return one of the LOG_POLICY_PUBLIC, LOG_POLICY_SERVICE, LOG_POLICY_MUTE depending if *text* should be printed to the console. To be overridden by engine. """
+        return Common.LOG_POLICY_PUBLIC
 
     def process_output(self, stdout, stderr):
         """
@@ -1194,7 +1199,7 @@ class Common(object):
         self._current_task = uri
 
     @staticmethod
-    def scan_file_sequences(root_folder):
+    def scan_file_sequences(root_folder, younger_than=None):
         """
         Scan a folder recursively for file sequences and return them grouped by pattern.
         
@@ -1219,6 +1224,10 @@ class Common(object):
                 subdir = ""
             
             for file in files:
+                # Make sure file is younger than the provided Datetime object
+                if younger_than is not None and os.path.getmtime(os.path.join(root, file)) < younger_than.timestamp(): 
+                    continue
+                
                 # Skip hidden files and files without extensions
                 if file.startswith('.'):
                     continue
@@ -1302,6 +1311,7 @@ class Common(object):
 
     def execute(self):
         """Run computation/render"""
+        self.execution_start = datetime.datetime.now()
         self.prepare()
         self.pre()
         exitcode = -1
@@ -1480,10 +1490,12 @@ class Common(object):
                         else:
                             stdout = Common.safely_printable(line)
 
-                            if Common.do_print(False):
-                                Common.log(stdout, end="", aggregated_flush=True)
-                            else:
-                                Common.info(stdout, end="", aggregated_flush=True)
+                            policy = self.log_policy(stdout, False)
+                            if policy != Common.LOG_POLICY_MUTE:
+                                if policy == Common.LOG_POLICY_PUBLIC:
+                                    Common.log(stdout, end="", aggregated_flush=True)
+                                else:
+                                    Common.info(stdout, end="", aggregated_flush=True)
         
                             process_result = self.process_output(stdout, "")
                             if process_result is not None:
@@ -1503,10 +1515,12 @@ class Common(object):
                             stderr_ended = True
                         else:
                             stderr = Common.safely_printable(line)
-                            if Common.do_print(True):
-                                Common.log_stderr(stderr, end="", aggregated_flush=True)
-                            else:
-                                Common.warning(stderr, append_prefix=False, end="", aggregated_flush=True)
+                            policy = self.log_policy(stderr, True)
+                            if policy != Common.LOG_POLICY_MUTE:
+                                if policy == Common.LOG_POLICY_PUBLIC:
+                                    Common.log_stderr(stderr, end="", aggregated_flush=True)
+                                else:
+                                    Common.warning(stderr, append_prefix=False, end="", aggregated_flush=True)
         
                             # Also pass stderr to process_output for compatibility
                             process_result = self.process_output("", stderr)

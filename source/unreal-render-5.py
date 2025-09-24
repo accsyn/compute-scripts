@@ -2,7 +2,7 @@
 
     Unreal Movie Render Queue accsyn compute engine script.
 
-    Generates and rendere movie render queue based on the project, map, sequence, frame range and output path.
+    Renders level sequence by generating a MRQ job based on the project, map, sequence, frame range and output path.
 
     WAN access requires NAT port forwarding of required streaming ports, see mapping table in settings.
 
@@ -10,7 +10,8 @@
 
     Changelog:
 
-        v1r1; [25.09.17, Henrik Norin] Read Perforce credentials from file pointed out by environment variable.
+        v1r3; [25.09.19, Henrik Norin] Support variant naming in MRG variable assignments. Renamed engine, cleaned up code.
+        v1r2; [25.09.17, Henrik Norin] Ignore flooding Nanite mesh warnings.
         v1r1; [25.09.08, Henrik Norin] Initial version.
 
     This software is provided "as is" - the author and distributor can not be held
@@ -98,13 +99,21 @@ def create_mrq(
     unreal.log(f"Got MRG default variable assignments: {value.export_text()}")
 
     if start_frame is not None and end_frame is not None:
-        vas.set_value_int32(mapped_vars["Custom Start Frame"], start_frame)
-        vas.set_variable_assignment_enable_state(mapped_vars["Custom Start Frame"], True)
-        vas.set_value_int32(mapped_vars["Custom End Frame"], end_frame+1)
-        vas.set_variable_assignment_enable_state(mapped_vars["Custom End Frame"], True)
+        start_key = mapped_vars["Custom Start Frame"] if "Custom Start Frame" in mapped_vars else mapped_vars["StartFrame"]
+        vas.set_value_int32(start_key, start_frame)
+        vas.set_variable_assignment_enable_state(start_key, True)
+ 
+        end_key = mapped_vars["Custom End Frame"] if "Custom End Frame" in mapped_vars else mapped_vars["EndFrame"]
+        vas.set_value_int32(end_key, end_frame+1)
+        vas.set_variable_assignment_enable_state(end_key, True)
+
+        if 'CustomFrameRange' in mapped_vars:
+            vas.set_value_bool(mapped_vars["CustomFrameRange"], True)
+            vas.set_variable_assignment_enable_state(mapped_vars["CustomFrameRange"], True)
     
-    vas.set_value_serialized_string(mapped_vars["Output Directory"], f'(Path="{output_dir}")')
-    vas.set_variable_assignment_enable_state(mapped_vars["Output Directory"], True)
+    output_key = mapped_vars["Output Directory"] if "Output Directory" in mapped_vars else mapped_vars["OutputDirectory"]
+    vas.set_value_serialized_string(output_key, f'(Path="{output_dir}")')
+    vas.set_variable_assignment_enable_state(output_key, True)
 
     if "Include ProRes" in mapped_vars:
         vas.set_value_bool(mapped_vars["Include ProRes"], False)
@@ -152,7 +161,7 @@ create_mrq(level_path="%s", sequence_path="%s", preset_path="%s", output_dir="%s
 """
 
 class Engine(Common):
-    __revision__ = 6  # Increment this after each update
+    __revision__ = 3  # Increment this after each update
 
     # Engine configuration
     # IMPORTANT NOTE:
@@ -293,8 +302,8 @@ class Engine(Common):
                 end = parts[1]
 
         # Expect input_path to be a path to the unreal project
-        input_path = self.normalize_path(self.get_compute()["input"])
         assert "input" in self.get_compute(), "Unreal project input path is required!"
+        input_path = self.normalize_path(self.get_compute()["input"])
 
         assert "level" in parameters, "Level asset path is required!"
         Engine.validate_asset_path(parameters["level"])
@@ -316,7 +325,7 @@ class Engine(Common):
         Common.log(f"(pre) Project folder: {self.project_folder_path}")
 
          # First, sync perforce folder       
-        Engine.sync_perforce_folder(self.project_name, self.project_folder_path)    
+        #Engine.sync_perforce_folder(self.project_name, self.project_folder_path)    
 
         # Then, generate the MRQ asset
         # Generate a temp python script path
@@ -384,8 +393,10 @@ class Engine(Common):
             if False:
                 os.remove(self.p_temp_script)
             
-    def do_print(stderr=False):
-        return stderr # Log errors to public log, rest to service log
+    def log_policy(self, text, stderr=False):
+        if 0<text.find('(NOTE: "Disallow Nanite" on static mesh components can be used to suppress this warning and forcibly render the object as non-Nanite.)'):
+            return Common.LOG_POLICY_MUTE
+        return Common.LOG_POLICY_PUBLIC if stderr else Common.LOG_POLICY_SERVICE # Log errors to public log, rest to service log
 
     def get_commandline(self, item):
         """Run the render using Unreal CLI"""
@@ -508,117 +519,7 @@ class Engine(Common):
         """ Tell engine to run our worker every 10 seconds """
         return (10.0, self._watch_output_folder)
 
-    # Perforce
-
-    @staticmethod
-    def set_perforce_credentials():
-        """ Read and load P4 credentials """
-
-        computer_name = socket.gethostname()  # Get computer name
-        if not computer_name:
-            Common.log("[ERROR] Unable to get the computer name.")
-            sys.exit(1)
-
-        pipeline_credentials_path = os.environ.get("STILLERPIPE_PERFORCE_CREDENTIALS_PATH")
-        if not pipeline_credentials_path:
-            Common.log_stderr("[ERROR] STILLERPIPE_PERFOCE_CREDENTIALS_PATH environment variable is not set.")
-            sys.exit(1)
-        elif not os.path.exists(pipeline_credentials_path):
-            Common.log_stderr("[ERROR] STILLERPIPE_PERFOCE_CREDENTIALS_PATH environment variable is not set.")
-            sys.exit(1)
-            
-        entry = None
-        with open(pipeline_credentials_path, "r") as f:
-            data = f.read()
-
-            # Use csv.DictReader to parse the data
-            reader = csv.DictReader(StringIO(data), delimiter=';')
-
-            # Read rows into list of dicts
-            rows = [row for row in reader if any(row.values())]
-
-            # Find entry for this computer
-            for row in rows:
-                if -1<row['computer'].lower().find(computer_name.lower()):
-                    entry = row
-                    break
-            if not entry:
-                print(f"[ERROR] Unable to find credentials for computer {computer_name} in pipeline data file.")
-                sys.exit(1)
-
-        # Set P4USER and P4PASSWD environment variables here
-        os.environ["P4USER"] = entry['p4user']  # Replace with your Perforce username
-        os.environ["P4PASSWD"] = entry['p4password']  # Replace with your Perforce password
-        os.environ["P4CLIENT"] = entry['p4client']  # Replace with your Perforce password
-        Common.log(f"Perforce credentials set (user: {entry['p4user']})")
-
-        return entry['p4client']
-
-    # @staticmethod
-    # def get_latest_changelist(project_folder_path):    
-    #     # Run p4 changes to get the latest changelist for the specified path
-    #     command = ["p4", "changes", "-m", "1", f"{project_folder_path}"]
-    #     Common.log("Executing command:", " ".join(command))  # Print the command to be executed
-
-    #     try:
-    #         result = subprocess.run(command, capture_output=True, text=True, check=True)
-    #         # Extract the changelist number from the output
-    #         lines = result.stdout.strip().splitlines()
-    #         if lines:
-    #             changelist = lines[0].split()[1]  # The changelist number is the second element
-    #             Common.log(f"Latest changelist: {changelist}")
-    #             return changelist
-    #         else:
-    #             Common.log("Error: No changelist found.")
-    #             return None
-    #     except subprocess.CalledProcessError as e:
-    #         Common.log(f"Error getting the latest changelist: {e.stderr}")
-    #         sys.exit(1)
-
-    @staticmethod
-    def sync_perforce_folder(project_name, project_folder_path):
-        """Sync the Perforce folder"""
-        workspace = Engine.set_perforce_credentials()  # Set up the Perforce credentials
-
-        Common.log(f"Syncing Perforce workspace: {workspace}")
-
-        #changelist_number = self.get_latest_changelist()  # Get the latest changelist automatically
-        # command = ["p4", "-c", workspace, "sync", f"{PROJECT_FOLDER_PATH}@{changelist_number}"]
-        
-        # Change dir to project folder
-        os.chdir(project_folder_path)
-        
-        commands = ["p4", "sync", f"//{project_name}/Environments/...#head", f"//{project_name}/_Tools_Plugins/...#head"]
-        Common.log("Executing command:", " ".join(commands))  # Print the full command
-
-        try:
-            # Run the Perforce sync command using communicate() to avoid deadlock
-            with subprocess.Popen(commands, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as process:
-                stdout, stderr = process.communicate()
-                
-                # Log stdout line by line
-                if stdout:
-                    for line in stdout.splitlines():
-                        Common.info(f"(p4 sync) {line.strip()}")
-                
-                # Log stderr line by line
-                if stderr:
-                    for line in stderr.splitlines():
-                        Common.log_stderr(f"(p4 sync) {line.strip()}")
-
-            if process.returncode != 0:
-                Common.log(f"Perforce sync completed with errors(returncode: {process.returncode}), ignoring.")
-            else:
-                Common.log("Perforce sync completed successfully.")
- 
-        except subprocess.TimeoutExpired:
-            Common.log(f"[ERROR] The Perforce sync command timed out.")
-            sys.exit(1)
-
-        except subprocess.CalledProcessError as e:
-            Common.log(f"[ERROR] syncing Perforce files: {e.stderr}")
-            sys.exit(1)
-
+    
 if __name__ == "__main__":
     if "--help" in sys.argv:
         Engine.usage()
